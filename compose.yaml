@@ -1,0 +1,86 @@
+# Nos Souhaits — app, Postgres 17 et sauvegarde nocturne.
+# Sur un NAS : copier ce dossier vers /volume1/docker/nos-souhaits
+# puis « docker compose up -d ». Voir le README.
+
+name: nos-souhaits
+
+services:
+  app:
+    build: .
+    image: nos-souhaits:local
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: postgres://wishlist:${DB_PASSWORD:-wishlist-dev-password}@db:5432/wishlist
+      ORIGIN: ${ORIGIN:-http://127.0.0.1:3080}
+      PIN_PEPPER: ${PIN_PEPPER:-dev-pepper-change-me-not-for-production-use!!}
+      TOTP_KEY: ${TOTP_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      ADMIN_PATH: ${ADMIN_PATH:-/gestion}
+      UPLOAD_DIR: /data/uploads
+      BACKUP_DIR: /data/backups
+      SETUP_TOKEN_FILE: /data/uploads/setup-token
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
+      # Ne pas définir ADDRESS_HEADER : SvelteKit lève une erreur si l'en-tête
+      # est absent (healthcheck, accès direct). L'application lit X-Forwarded-For
+      # elle-même et retombe sur l'adresse TCP.
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+      PROTOCOL_HEADER: ${PROTOCOL_HEADER:-X-Forwarded-Proto}
+      HOST_HEADER: ${HOST_HEADER:-X-Forwarded-Host}
+      TZ: Europe/Brussels
+    volumes:
+      - ./data:/data
+      - ./backups:/data/backups:ro
+    ports:
+      - "127.0.0.1:3080:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal, egress]
+    mem_limit: 384m
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wishlist
+      POSTGRES_USER: wishlist
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-wishlist-dev-password}
+      TZ: Europe/Brussels
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=20", "-c", "work_mem=4MB"]
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks: [internal]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wishlist -d wishlist"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: wishlist
+      POSTGRES_USER: wishlist
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-wishlist-dev-password}
+      POSTGRES_EXTRA_OPTS: -Z1
+      SCHEDULE: "0 3 * * *"
+      BACKUP_ON_START: "TRUE"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      TZ: Europe/Brussels
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+    mem_limit: 128m
+
+networks:
+  internal:
+    internal: true
+  egress: {}
