@@ -68,6 +68,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const https = isHttps(event.url);
+	if (event.url.pathname === '/favicon.ico') {
+		const headers = new Headers({ location: '/favicon.svg' });
+		applySecurityHeaders(headers, https);
+		return new Response(null, { status: 302, headers });
+	}
 	const path = event.url.pathname.replace(/\/+$/, '') || '/';
 	if (!isOpenPath(event.url.pathname)) {
 		const ready = await isSetupComplete();
