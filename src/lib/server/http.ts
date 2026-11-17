@@ -15,7 +15,7 @@ export function applySecurityHeaders(headers: Headers, https: boolean) {
 	if (https) {
 		headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 	}
-	headers.set('Cache-Control', 'no-store');
+	if (!headers.has('Cache-Control')) headers.set('Cache-Control', 'no-store');
 }
 
 export function requestIp(event: { request: Request; getClientAddress: () => string }): string {

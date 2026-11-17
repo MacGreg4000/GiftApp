@@ -20,6 +20,7 @@ import { getConfig } from '#lib/server/config';
 import { getDb } from '#lib/server/db/client';
 import { appGroup, appUser, auditLog, groupMember } from '#lib/server/db/schema';
 import { requestIp } from '#lib/server/http';
+import { adminListRegister, setListArchived } from '#lib/server/lists';
 import type { Actions, PageServerLoad } from './$types';
 
 const ADMIN_SECTIONS = ['', 'journal', 'parametres', 'listes', 'sauvegardes'] as const;
@@ -89,6 +90,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		section.sub === 'journal'
 			? await getDb().select().from(auditLog).orderBy(desc(auditLog.at)).limit(200)
 			: [];
+	const lists = section.sub === 'listes' ? await adminListRegister() : [];
 	const backup = latestBackup(getConfig().backupDir);
 	return {
 		mode: 'app' as const,
@@ -101,6 +103,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		sessions,
 		stats,
 		taken,
+		lists,
 		journal,
 		backup: backup
 			? { file: backup.file.split('/').slice(-2).join('/'), mtime: backup.mtime.toISOString(), stale: backup.stale }
@@ -231,6 +234,13 @@ export const actions: Actions = {
 		const data = await event.request.formData();
 		await removeMember(String(data.get('groupId') ?? ''), String(data.get('userId') ?? ''));
 		return { message: 'Membre retiré du groupe.' };
+	},
+	archiveList: async (event) => {
+		const denied = await requireAdmin(event.locals);
+		if (denied) return denied;
+		const data = await event.request.formData();
+		await setListArchived(String(data.get('id') ?? ''), data.get('archived') === '1');
+		redirect(303, `${getConfig().adminPath}/listes`);
 	},
 	revokeSession: async (event) => {
 		const denied = await requireAdmin(event.locals);

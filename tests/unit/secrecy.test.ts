@@ -8,6 +8,7 @@ import {
 	type WishRecord
 } from '#lib/server/secrecy/dto';
 import { listProgressForViewer } from '#lib/server/secrecy/progress';
+import { reservationCard, reservationText } from '#lib/reservation-label';
 
 const wish: WishRecord = {
 	id: 'w1',
@@ -43,6 +44,8 @@ describe('secret d’achat', () => {
 		expect(dto).not.toHaveProperty('fundedPercent');
 		expect(JSON.stringify(dto)).not.toContain('Julie');
 		expect(JSON.stringify(dto)).not.toContain('buyer');
+		expect(reservationCard(dto)).toBe('rien');
+		expect(reservationText('rien')).toBeNull();
 	});
 
 	it('dit à un autre membre que c’est pris, jamais par qui', () => {
@@ -53,6 +56,8 @@ describe('secret d’achat', () => {
 		expect(dto).not.toHaveProperty('status');
 		expect(memberPayloadLeaks(dto, 'paul')).toBe(false);
 		expect(JSON.stringify(dto)).not.toContain('Julie');
+		expect(reservationCard(dto)).toBe('pris');
+		expect(reservationText('pris')).toBe('Déjà pris');
 	});
 
 	it('donne à l’acheteur sa note et son statut, sans l’identité des autres', () => {

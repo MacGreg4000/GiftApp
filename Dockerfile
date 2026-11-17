@@ -15,7 +15,7 @@ RUN apk add --no-cache su-exec
 ENV NODE_ENV=production \
 	PORT=3000 \
 	HOST=0.0.0.0 \
-	BODY_SIZE_LIMIT=2M
+	BODY_SIZE_LIMIT=12M
 COPY --from=build --chown=node:node /app/build ./build
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json

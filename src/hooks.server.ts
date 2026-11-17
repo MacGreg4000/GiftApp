@@ -19,6 +19,9 @@ export const init: ServerInit = async () => {
 	if (!(await isSetupComplete())) await ensureSetupToken();
 	const timer = setInterval(() => {
 		cleanupExpired().catch((error) => console.error(error));
+		import('#lib/server/photos')
+			.then((photos) => photos.cleanupOrphanPhotos())
+			.catch((error) => console.error(error));
 	}, 60 * 60 * 1000);
 	timer.unref?.();
 	console.log('Nos Souhaits est prêt.');

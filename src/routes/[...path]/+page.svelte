@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import Header from '#lib/components/Header.svelte';
 	import Avatar from '#lib/components/Avatar.svelte';
-	import { ACCENT_COLORS } from '#lib/palette';
+	import { ACCENT_COLORS, THEME_LABELS } from '#lib/palette';
 	import { formatWhen, lockLabel } from '#lib/format';
 
 	let { data, form } = $props();
@@ -85,7 +85,36 @@
 			</div>
 		{:else if data.section === 'listes'}
 			<h1 class="serif">Listes</h1>
-			<p class="sub">La création des listes de souhaits arrive à l’étape suivante. Le schéma est déjà prêt.</p>
+			<p class="sub">N’importe quel membre crée une liste depuis son groupe. Vous pouvez toutes les lire, les modifier et les archiver.</p>
+			<div class="table-card">
+				<table>
+					<thead>
+						<tr><th>Liste</th><th>Groupe</th><th>Souhaits</th><th>Pris</th><th></th></tr>
+					</thead>
+					<tbody>
+						{#each data.lists as list}
+							<tr>
+								<td>
+									<a href="/listes/{list.id}">{list.title}</a>
+									<br /><small class="quiet">{THEME_LABELS[list.theme] ?? 'Liste'}{#if list.recipientName} · pour {list.recipientName}{/if}{#if list.archivedAt} · archivée{/if}</small>
+								</td>
+								<td>{list.groupName}</td>
+								<td>{list.wishes}</td>
+								<td>{list.taken}</td>
+								<td>
+									<form method="post" action="?/archiveList">
+										<input type="hidden" name="id" value={list.id} />
+										<input type="hidden" name="archived" value={list.archivedAt ? '0' : '1'} />
+										<button class="btn soft small" type="submit">{list.archivedAt ? 'Réactiver' : 'Archiver'}</button>
+									</form>
+								</td>
+							</tr>
+						{:else}
+							<tr><td colspan="5">Aucune liste. Un membre en crée une depuis la page du groupe.</td></tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		{:else if data.section === 'sauvegardes'}
 			<h1 class="serif">Sauvegardes</h1>
 			<div class="table-card">
@@ -193,13 +222,14 @@
 							<p class="empty-inline">Aucun cadeau réservé pour le moment. Cette colonne restera cachée aux membres.</p>
 						{:else}
 							<table>
-								<thead><tr><th>Cadeau</th><th>Pour</th><th>Pris par</th></tr></thead>
+								<thead><tr><th>Cadeau</th><th>Pour</th><th>Pris par</th><th>Quand</th></tr></thead>
 								<tbody>
 									{#each data.taken as row}
 										<tr>
 											<td>{row.title}<br /><small class="quiet">{row.listTitle}</small></td>
 											<td>{row.ownerName}</td>
 											<td>{row.buyerName}</td>
+											<td>{formatWhen(new Date(row.at))}</td>
 										</tr>
 									{/each}
 								</tbody>

@@ -55,10 +55,10 @@
 				</div>
 			</div>
 			{#if group.lists.length === 0}
-				<p class="empty-inline">Aucune liste pour le moment. Elles seront ajoutées ici.</p>
+				<p class="empty-inline">Aucune liste pour le moment. Un membre du groupe peut en créer une.</p>
 			{/if}
 			{#each group.lists as list}
-				<a class="list-row" href="/groupes/{group.id}">
+				<a class="list-row" href="/listes/{list.id}">
 					<span class="avatar" style:background={accent.header}>{list.title.charAt(0)}</span>
 					<span>
 						<span class="list-kicker">{THEME_LABELS[list.theme] ?? 'Liste'}</span>

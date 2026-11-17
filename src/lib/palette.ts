@@ -30,5 +30,17 @@ export const THEME_LABELS: Record<string, string> = {
 	fete_des_peres: 'Fête des pères',
 	mariage: 'Mariage',
 	naissance: 'Naissance',
-	generique: 'Liste'
+	generique: 'Autre'
 };
+
+export const LIST_THEMES = [
+	{ id: 'noel', label: 'Noël' },
+	{ id: 'saint_nicolas', label: 'Saint-Nicolas' },
+	{ id: 'anniversaire', label: 'Anniversaire' },
+	{ id: 'generique', label: 'Autre' }
+] as const;
+
+export function themeArt(theme: string): 'noel' | 'saint_nicolas' | 'anniversaire' | 'generique' {
+	if (theme === 'noel' || theme === 'saint_nicolas' || theme === 'anniversaire') return theme;
+	return 'generique';
+}

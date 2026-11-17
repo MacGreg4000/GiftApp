@@ -36,7 +36,8 @@ export async function groupsForMember(userId: string) {
 			groupId: wishList.groupId,
 			title: wishList.title,
 			theme: wishList.theme,
-			eventDate: wishList.eventDate
+			eventDate: wishList.eventDate,
+			recipientId: wishList.recipientId
 		})
 		.from(wishList)
 		.where(and(inArray(wishList.groupId, ids), isNull(wishList.archivedAt)));
@@ -64,6 +65,8 @@ export async function groupsForMember(userId: string) {
 				title: list.title,
 				theme: list.theme,
 				eventDate: list.eventDate,
+				recipientName: members.find((person) => person.id === list.recipientId)?.displayName ?? null,
+				wishCount: wishRows.filter((item) => item.listId === list.id).length,
 				progress: listProgressForViewer(
 					wishRows.filter((item) => item.listId === list.id),
 					userId

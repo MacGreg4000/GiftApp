@@ -123,7 +123,13 @@ L’admin crée un groupe, ajoute un membre (prénom affiché, lien de parenté)
 
 Le membre choisit son prénom (mémorisé sur l’appareil, pas dans un annuaire public) puis son code. Un prénom inconnu et un code faux donnent le même message. Cinq échecs verrouillent le compte 15 minutes, puis 1 heure, puis 6 heures, puis jusqu’à déblocage par l’admin. Dix échecs depuis la même adresse suivent une échelle proche. Au-delà de 200 échecs dans l’heure, les nouvelles connexions par code sont suspendues une heure ; les sessions déjà ouvertes continuent. La session membre dure environ 180 jours et se prolonge à l’usage. Cookie `httpOnly` : `__Host-session` en HTTPS, `ns_session` en HTTP.
 
-Le propriétaire d’un souhait ne reçoit aucune information de réservation (option A). Pour un cadeau commun, seul l’organisateur de la liste et l’admin voient qui a promis combien. Ces règles sont appliquées dans les objets renvoyés au navigateur et par des triggers SQL. L’interface des listes n’est pas encore construite.
+Le propriétaire d’un souhait ne reçoit aucune information de réservation (option A) : pas de « déjà pris », pas de nom. Les autres membres voient seulement « Déjà pris ». La personne qui a réservé peut annuler ou marquer le cadeau comme acheté. L’administrateur voit qui a pris quoi, sur la fiche du groupe et dans Listes. Ces règles sont dans les objets renvoyés à la page et à `GET /listes/<id>/json`, et dans les triggers SQL.
+
+N’importe quel membre du groupe crée une liste (nom, thème Noël, Saint-Nicolas, Anniversaire ou Autre, date facultative, personne concernée facultative). Si une personne est indiquée, elle seule y dépose des souhaits. Sinon chacun ajoute les siens. L’administrateur modifie et archive toutes les listes.
+
+Un souhait porte un titre, un lien facultatif, une photo facultative, une priorité de 1 à 3, une description et la case « surprenez-moi ». Cette case désigne une idée vague, sans objet précis : le lien reste facultatif et la carte s’affiche comme un cadeau mystère. « Lire le lien » tente un aperçu (titre et image) : http ou https seulement, ports 80 et 443, DNS revérifié à chaque redirection (3 au plus), adresses privées et locales refusées, 5 secondes, 1 Mo, sans cookie. L’image est recopiée sur le volume, jamais affichée depuis le site d’origine.
+
+Les photos déposées (10 Mo, JPEG, PNG, WebP, HEIC) sont réencodées en WebP (1 200 px et miniature), sans données EXIF, dans `data/uploads`. Elles ne sont servies qu’aux membres du groupe.
 
 ## Développement
 
@@ -148,9 +154,7 @@ npm test
 
 ## Ce qui n’est pas dans cette version
 
-- Création des listes et des souhaits, photos, réservation par les membres, cagnottes.
-- Thèmes illustrés au-delà des en-têtes déjà dessinés (connexion, accueil).
-- Notifications Web Push.
+- Cadeaux communs (cagnottes) et notifications Web Push.
 - Prix, sauf les montants de cagnotte prévus plus tard.
 
-Questions encore ouvertes : modèle exact du NAS, nom de domaine et proxy retenus, restriction de l’admin à l’adresse de la maison, fail2ban ou CrowdSec devant le proxy, qui pourra créer une liste, sens du mot « surprise » sur une idée libre.
+Questions encore ouvertes : modèle exact du NAS, nom de domaine et proxy retenus, restriction de l’admin à l’adresse de la maison, fail2ban ou CrowdSec devant le proxy.
