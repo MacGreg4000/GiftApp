@@ -1,22 +1,19 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { onMount, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import HeroArt from '#lib/components/HeroArt.svelte';
 	import PinInput from '#lib/components/PinInput.svelte';
 	import { initial, avatarColor } from '#lib/palette';
 
 	let { data, form } = $props();
-	let prenom = $state(untrack(() => form?.prenom ?? data.remembered ?? ''));
-	let saved = $state<string[]>([]);
-
-	onMount(() => {
-		try {
-			const raw = JSON.parse(localStorage.getItem('ns.prenoms') ?? '[]');
-			if (Array.isArray(raw)) saved = raw.filter((item) => typeof item === 'string').slice(0, 8);
-		} catch {
-			saved = [];
-		}
-	});
+	let prenom = $state(
+		untrack(() => {
+			const wanted = (form?.prenom ?? '') || data.remembered || '';
+			const hit = data.members.find((m) => m.loginName === wanted || m.displayName === wanted);
+			return hit?.loginName ?? '';
+		})
+	);
+	const shown = $derived(data.members.find((m) => m.loginName === prenom)?.displayName ?? '');
 </script>
 
 <svelte:head>
@@ -47,39 +44,25 @@
 	<section class="login-panel">
 		<p class="eyebrow">Bienvenue</p>
 		<h2>Bonjour, qui êtes-vous ?</h2>
-		<p class="lede">Le prénom affiché par l’organisateur, tiret compris, puis le code à six chiffres.</p>
+		<p class="lede">Choisissez votre prénom dans la liste, puis saisissez votre code à six chiffres.</p>
 		{#if form?.message}
 			<p class="alert" role="alert">{form.message}</p>
 		{/if}
 		<form method="post" use:enhance>
 			<label class="field">
-				<span>Votre prénom</span>
-				<div class="name-input">
-					{#if prenom.trim()}
-						<span class="avatar" style:background={avatarColor(prenom)}>{initial(prenom)}</span>
-					{/if}
-					<input
-						name="prenom"
-						bind:value={prenom}
-						list="prenoms-locaux"
-						autocomplete="username"
-						required
-						placeholder="Votre prénom"
-					/>
-				</div>
-				<small class="hint">
-					{#if saved.length}
-						Sur cet appareil, vous pouvez reprendre un prénom déjà utilisé. Aucune liste n’est publique.
-					{:else}
-						Saisissez le prénom indiqué par l’organisateur. Il n’y a pas de liste publique.
-					{/if}
-				</small>
-			</label>
-			<datalist id="prenoms-locaux">
-				{#each saved as name}
-					<option value={name}></option>
-				{/each}
-			</datalist>
+					<span>Votre prénom</span>
+					<div class="name-input">
+						{#if shown}
+							<span class="avatar" style:background={avatarColor(shown)}>{initial(shown)}</span>
+						{/if}
+						<select name="prenom" bind:value={prenom} required>
+							<option value="" disabled>Choisissez votre prénom</option>
+							{#each data.members as m (m.loginName)}
+								<option value={m.loginName}>{m.displayName}</option>
+							{/each}
+						</select>
+					</div>
+				</label>
 			<div class="field">
 				<span>Votre code personnel</span>
 				<PinInput />

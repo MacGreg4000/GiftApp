@@ -166,13 +166,15 @@ button { cursor: pointer; }
 	padding: 8px 14px 8px 8px;
 	box-shadow: 0 8px 24px rgba(90, 50, 20, 0.04);
 }
-.name-input input {
+.name-input input,
+.name-input select {
 	border: 0;
 	background: transparent;
 	flex: 1;
 	padding: 8px 4px;
 	outline: none;
 	font-size: 1.05rem;
+	min-width: 0;
 }
 .pin {
 	display: flex;

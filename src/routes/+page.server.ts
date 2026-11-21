@@ -3,11 +3,21 @@ import { loginWithPin } from '#lib/server/auth/login';
 import { applySessionCookie } from '#lib/server/auth/session';
 import { getConfig } from '#lib/server/config';
 import { requestIp } from '#lib/server/http';
+import { getDb } from '#lib/server/db/client';
+import { appUser } from '#lib/server/db/schema';
+import { asc, eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (locals.user) redirect(303, '/accueil');
+	// Liste publique volontaire : la protection repose sur le blocage par compte et par IP.
+	const members = await getDb()
+		.select({ loginName: appUser.loginName, displayName: appUser.displayName })
+		.from(appUser)
+		.where(eq(appUser.isActive, true))
+		.orderBy(asc(appUser.displayName));
 	return {
+		members,
 		remembered: cookies.get('ns_prenom') ?? '',
 		adminPath: getConfig().adminPath
 	};

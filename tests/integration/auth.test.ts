@@ -286,4 +286,63 @@ describeDb('authentification et gardes SQL', () => {
 		});
 		expect(empty.ok).toBe(false);
 	});
+
+	it('parcours admin : code généré à la création, puis connexion avec le code renvoyé', async () => {
+		const group = await getDb().insert(appGroup).values({ name: 'Famille' }).returning();
+		const created = await addMember({
+			groupId: group[0]!.id,
+			displayName: 'Marie',
+			loginName: '',
+			label: '',
+			pin: '',
+			generate: true
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		expect(created.generated).toBe(true);
+		expect(created.pin).toMatch(/^\d{6}$/);
+
+		for (const [i, name] of ['Marie', 'marie', ' MARIE '].entries()) {
+			const res = await loginWithPin({
+				loginName: name,
+				pin: created.pin,
+				ip: `203.0.113.${60 + i}`,
+				userAgent: 'vitest'
+			});
+			expect(res.ok, `connexion avec « ${name} »`).toBe(true);
+		}
+		const attempts = await getDb().select().from(loginAttempt);
+		expect(attempts.every((row) => row.userId !== null)).toBe(true);
+	});
+
+	it('parcours admin : setMemberPin (choisi puis généré) puis connexion avec le code renvoyé', async () => {
+		const group = await getDb().insert(appGroup).values({ name: 'Famille' }).returning();
+		const created = await addMember({
+			groupId: group[0]!.id,
+			displayName: 'Léa',
+			loginName: '',
+			label: '',
+			pin: '',
+			generate: true
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		const id = (await getDb().select().from(appUser))[0]!.id;
+
+		const chosen = await setMemberPin(id, '482915');
+		expect(chosen.ok).toBe(true);
+		const withChosen = await loginWithPin({ loginName: 'Léa', pin: '482915', ip: '203.0.113.70', userAgent: 'vitest' });
+		expect(withChosen.ok).toBe(true);
+
+		const regenerated = await setMemberPin(id, '', true);
+		expect(regenerated.ok).toBe(true);
+		if (!regenerated.ok) return;
+		const withGenerated = await loginWithPin({
+			loginName: 'lea',
+			pin: regenerated.pin,
+			ip: '203.0.113.71',
+			userAgent: 'vitest'
+		});
+		expect(withGenerated.ok).toBe(true);
+	});
 });
