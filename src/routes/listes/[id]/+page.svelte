@@ -39,6 +39,7 @@
 	);
 
 	let box = $state<HTMLDialogElement | null>(null);
+	let photoInput = $state<HTMLInputElement | null>(null);
 	let editing = $state<ListedWish | null>(null);
 	let title = $state('');
 	let link = $state('');
@@ -61,6 +62,7 @@
 		shared = false;
 		target = '';
 		preview = null;
+		if (photoInput) photoInput.value = '';
 		saving = false;
 		requestKey = crypto.randomUUID();
 		box?.showModal();
@@ -76,6 +78,7 @@
 		shared = Boolean(wish.isShared);
 		target = wish.targetAmountCents ? (wish.targetAmountCents / 100).toFixed(2).replace('.', ',') : '';
 		preview = null;
+		if (photoInput) photoInput.value = '';
 		box?.showModal();
 	}
 
@@ -430,7 +433,7 @@
 		{#if form?.message}<p class="alert">{form.message}</p>{/if}
 		{#if preview?.siteName}<p class="quiet">Aperçu : {preview.siteName}</p>{/if}
 		<label>Photo <span class="quiet">JPEG, PNG, WebP ou HEIC, 10 Mo</span>
-			<input name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
+			<input name="photo" type="file" bind:this={photoInput} accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
 		</label>
 		{#if editing?.imageUrl}
 			<label class="choice"><input type="checkbox" name="retirerPhoto" value="1" /> Retirer la photo</label>
