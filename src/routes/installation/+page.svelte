@@ -53,7 +53,7 @@
 			<form method="post" action="?/confirm" class="stack" use:enhance>
 				<label>
 					Code à 6 chiffres
-					<input name="code" inputmode="numeric" autocomplete="one-time-code" required pattern="[0-9]{6}" />
+					<input name="code" inputmode="numeric" autocomplete="one-time-code" required pattern={'[0-9]{6}'} />
 				</label>
 				<button class="btn" type="submit">Vérifier</button>
 			</form>
