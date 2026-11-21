@@ -49,7 +49,7 @@ function looksLikeDate(pin: string): boolean {
 	return false;
 }
 
-/** PIN trop prévisibles : suites, répétitions, dates et années. */
+/** PIN prévisibles : utilisé seulement pour ne pas en proposer au bouton Générer. */
 export function isTrivialPin(pin: string): boolean {
 	if (!/^\d{6}$/.test(pin)) return true;
 	if (TRIVIAL.has(pin)) return true;
@@ -71,14 +71,11 @@ export function isTrivialPin(pin: string): boolean {
 	return false;
 }
 
-/** Vide = à générer. Le login reste prénom + code : deux personnes peuvent avoir le même code. */
+/** Vide = à générer. Seule la longueur est contrôlée : l'admin choisit librement le code (dates, suites… acceptées). Le login reste prénom + code : deux personnes peuvent avoir le même code. */
 export function pinProblem(raw: string): string | null {
 	const digits = raw.replace(/\D/g, '');
 	if (!digits) return null;
 	if (digits.length !== 6) return 'Le code doit contenir exactement 6 chiffres.';
-	if (isTrivialPin(digits)) {
-		return 'Ce code est trop facile (suite, date ou répétition). Choisissez-en un autre, ou touchez Générer.';
-	}
 	return null;
 }
 

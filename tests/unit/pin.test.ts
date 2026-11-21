@@ -16,7 +16,8 @@ describe('codes PIN', () => {
 		expect(pinProblem('')).toBeNull();
 		expect(pinProblem('847291')).toBeNull();
 		expect(pinProblem('12345')).toMatch(/6 chiffres/);
-		expect(pinProblem('123456')).toMatch(/trop facile/);
+		expect(pinProblem('123456')).toBeNull();
+		expect(pinProblem('240714')).toBeNull();
 	});
 
 	it('ne génère pas de code trivial', () => {
