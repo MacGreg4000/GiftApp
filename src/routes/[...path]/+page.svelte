@@ -268,6 +268,24 @@
 												<button class="btn soft small" type="submit" name="generate" value="1" formnovalidate>Générer</button>
 												<button class="btn small" type="submit">Enregistrer</button>
 											</form>
+											<details class="name-edit">
+												<summary class="btn soft small">Modifier le prénom</summary>
+												<form method="post" action="?g={data.current.id}&/updateMember" class="pin-edit">
+													<input type="hidden" name="userId" value={member.id} />
+													<input type="hidden" name="groupId" value={data.current.id} />
+													<input type="hidden" name="label" value={member.label ?? ''} />
+													<input type="hidden" name="isActive" value={member.isActive ? '1' : '0'} />
+													<label>
+														Prénom affiché
+														<input name="displayName" value={member.displayName} maxlength="60" required />
+													</label>
+													<label>
+														Prénom de connexion
+														<input name="loginName" value={member.loginName} maxlength="40" required />
+													</label>
+													<button class="btn small" type="submit">Enregistrer</button>
+												</form>
+											</details>
 										</td>
 									</tr>
 									{#each data.sessions.filter((item) => item.userId === member.id) as device}
