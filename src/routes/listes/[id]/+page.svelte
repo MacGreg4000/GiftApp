@@ -3,6 +3,8 @@
 	import Header from '#lib/components/Header.svelte';
 	import ThemeArt from '#lib/components/ThemeArt.svelte';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import GiftArt from '#lib/components/GiftArt.svelte';
+	import { onMount } from 'svelte';
 	import { LIST_THEMES, THEME_LABELS, themeArt } from '#lib/palette';
 	import { daysUntil, formatEventDate } from '#lib/format';
 	import { reservationText } from '#lib/reservation-label';
@@ -28,6 +30,23 @@
 		}
 		return [...groups.values()].filter((section) => section.wishes.length > 0);
 	});
+
+	let view = $state<'cartes' | 'liste'>('cartes');
+	onMount(() => {
+		try {
+			if (localStorage.getItem('ns.vue') === 'liste') view = 'liste';
+		} catch {
+			/* préférence facultative */
+		}
+	});
+	function setView(next: 'cartes' | 'liste') {
+		view = next;
+		try {
+			localStorage.setItem('ns.vue', next);
+		} catch {
+			/* préférence facultative */
+		}
+	}
 
 	let filter = $state('tous');
 	const visible = $derived(
@@ -159,6 +178,14 @@
 		{/each}
 	</div>
 
+	<div class="view-tools">
+		<div class="seg" role="group" aria-label="Affichage">
+			<button type="button" class:on={view === 'cartes'} onclick={() => setView('cartes')}>Cartes</button>
+			<button type="button" class:on={view === 'liste'} onclick={() => setView('liste')}>Liste</button>
+		</div>
+		<button type="button" class="btn soft small" onclick={() => window.print()}>Imprimer / PDF</button>
+	</div>
+
 	{#if data.page.wishes.length === 0}
 		<article class="group-card">
 			<p class="empty-inline">
@@ -181,24 +208,15 @@
 				{section.name}
 				{#if section.label}<small class="quiet">{section.label}</small>{/if}
 			</h2>
-			<div class="wish-grid">
+			<div class="wish-grid" class:list={view === 'liste'}>
 				{#each section.wishes as wish}
 					{@const label = reservationText(wish.card)}
 					<article class="wish-card" class:mystery={wish.isSurprise && !wish.imageUrl}>
 						<div class="wish-visual">
 							{#if wish.imageUrl}
 								<img src={wish.thumbUrl ?? wish.imageUrl} alt="" />
-							{:else if wish.isSurprise}
-								<div class="mystery-art" aria-hidden="true">
-									<svg viewBox="0 0 80 80" width="72" height="72">
-										<rect x="14" y="34" width="52" height="34" rx="6" fill="#e0b15a" />
-										<path d="M14 42h52" stroke="#fffaf2" stroke-width="4" />
-										<path d="M40 34v34" stroke="#fffaf2" stroke-width="4" />
-										<path d="M40 34c-8-14-22-12-18-4s14 6 18 4c4-14 18-12 18-4s-10 10-18 4z" fill="#b8322a" />
-									</svg>
-								</div>
 							{:else}
-								<div class="mystery-art plain" aria-hidden="true"></div>
+								<div class="mystery-art" aria-hidden="true"><GiftArt /></div>
 							{/if}
 							{#if wish.domain}
 								<span class="domain-badge">{wish.domain}</span>
@@ -408,6 +426,39 @@
 			</form>
 		</details>
 	{/if}
+
+	<section class="print-sheet">
+		<h1>{data.page.title}</h1>
+		<p class="print-sub">
+			{#if data.page.recipient}Pour {data.page.recipient.name} · {/if}{data.page.group.name}
+			{#if data.page.eventDate} · {formatEventDate(data.page.eventDate)}{/if}
+		</p>
+		{#each visible as section}
+			<h2>{section.name}{#if section.label} <small>{section.label}</small>{/if}</h2>
+			<ul class="print-list">
+				{#each section.wishes as wish}
+					<li>
+						<div class="print-thumb">
+							{#if wish.imageUrl}
+								<img src={wish.thumbUrl ?? wish.imageUrl} alt="" />
+							{:else}
+								<GiftArt size={48} />
+							{/if}
+						</div>
+						<div>
+							<p class="print-title">
+								{wish.title}
+								<span class="print-stars">{'★'.repeat(4 - wish.priority)}{'☆'.repeat(wish.priority - 1)}</span>
+							</p>
+							{#if wish.isShared}<p class="print-note">Cadeau commun</p>{/if}
+							{#if wish.description}<p>{wish.description}</p>{/if}
+							{#if wish.url && !wish.isSurprise}<p class="print-note">{wish.domain ?? wish.url}</p>{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/each}
+	</section>
 </main>
 
 {#if data.page.canAdd}
