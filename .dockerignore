@@ -1,0 +1,12 @@
+node_modules
+.svelte-kit
+.git
+data
+backups
+tests
+*.md
+.env
+.env.*
+!.env.example
+coverage
+.vscode

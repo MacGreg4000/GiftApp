@@ -1,0 +1,2 @@
+ALTER TABLE "wish" ADD COLUMN "idempotency_key" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "wish_idempotency_key_uq" ON "wish" USING btree ("idempotency_key") WHERE "wish"."idempotency_key" IS NOT NULL;
