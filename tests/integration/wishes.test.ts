@@ -6,6 +6,7 @@ import { appGroup, appUser, groupMember } from '#lib/server/db/schema';
 import { resetSetupCache } from '#lib/server/setup';
 import { reservationText } from '#lib/reservation-label';
 import { memberPayloadLeaks } from '#lib/server/secrecy/dto';
+import { completeRest, pledge } from '#lib/server/funding';
 import {
 	cancelReservation,
 	createList,
@@ -246,5 +247,83 @@ describeDb('listes, souhaits et secret de réservation', () => {
 		const page = await loadListPage(created.id, { role: 'member', userId: alice[0]!.id });
 		expect(page?.wishes).toHaveLength(1);
 		expect(page?.wishes[0]?.title).toBe('Écharpe rouge');
+	});
+
+	it('cache les parts d’un cadeau commun, sauf à l’organisateur et à l’admin', async () => {
+		const alice = await getDb()
+			.insert(appUser)
+			.values({ displayName: 'Alice', loginName: 'alice-cagnotte', pinHash: 'x' })
+			.returning();
+		const marc = await getDb()
+			.insert(appUser)
+			.values({ displayName: 'Marc', loginName: 'marc-cagnotte', pinHash: 'x' })
+			.returning();
+		const paul = await getDb()
+			.insert(appUser)
+			.values({ displayName: 'Paul', loginName: 'paul-cagnotte', pinHash: 'x' })
+			.returning();
+		const group = await getDb().insert(appGroup).values({ name: 'Famille' }).returning();
+		for (const user of [alice[0]!, marc[0]!, paul[0]!]) {
+			await getDb().insert(groupMember).values({ groupId: group[0]!.id, userId: user.id });
+		}
+		const created = await createList({
+			actor: { role: 'member', userId: alice[0]!.id },
+			groupId: group[0]!.id,
+			title: 'Anniversaire',
+			theme: 'anniversaire',
+			eventDate: '',
+			recipientId: ''
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		const gift = await createWish({
+			userId: alice[0]!.id,
+			listId: created.id,
+			title: 'Week-end',
+			url: '',
+			description: '',
+			priority: 2,
+			isSurprise: false,
+			isShared: true,
+			target: '100'
+		});
+		expect(gift.ok).toBe(true);
+		if (!gift.ok) return;
+		const own = await pledge({ userId: alice[0]!.id, wishId: gift.id, mode: 'montant', euros: '10', fraction: '' });
+		expect(own.ok).toBe(false);
+		const reserved = await reserveWish(paul[0]!.id, gift.id);
+		expect(reserved.ok).toBe(false);
+		const part = await pledge({ userId: paul[0]!.id, wishId: gift.id, mode: 'part', euros: '', fraction: '1/4' });
+		expect(part.ok).toBe(true);
+		const viewer = { role: 'member' as const, userId: marc[0]!.id };
+		const hidden = await wishesPayload(created.id, viewer);
+		const seen = hidden?.wishes[0];
+		expect(seen?.fundedPercent).toBe(25);
+		expect(seen).not.toHaveProperty('participantCount');
+		expect(seen).not.toHaveProperty('pledges');
+		expect(JSON.stringify(seen)).not.toContain('Paul');
+		expect(memberPayloadLeaks(seen!, marc[0]!.id)).toBe(false);
+		const owner = await wishesPayload(created.id, { role: 'member', userId: alice[0]!.id });
+		expect(owner?.wishes[0]).not.toHaveProperty('fundedPercent');
+		expect(owner?.wishes[0]).not.toHaveProperty('pledges');
+		expect(owner?.wishes[0]?.isShared).toBe(true);
+		expect(owner?.wishes[0]?.targetAmountCents).toBe(10000);
+		expect(JSON.stringify(owner?.wishes[0])).not.toContain('Paul');
+		const done = await completeRest(marc[0]!.id, gift.id);
+		expect(done.ok).toBe(true);
+		const after = await loadListPage(created.id, viewer);
+		expect(after?.wishes[0]?.isFunded).toBe(true);
+		expect(after?.wishes[0]?.iOrganize).toBe(true);
+		expect(after?.wishes[0]?.pledges?.map((item) => item.memberName).sort()).toEqual(['Marc', 'Paul']);
+		const paulPage = await loadListPage(created.id, { role: 'member', userId: paul[0]!.id });
+		expect(paulPage?.wishes[0]).not.toHaveProperty('pledges');
+		expect(paulPage?.wishes[0]?.organizerName).toBe('Marc');
+		expect(JSON.stringify(paulPage?.wishes[0]?.pledges ?? null)).not.toContain('Paul');
+		expect(paulPage?.wishes[0]?.participantCount).toBe(2);
+		const stillOwner = await wishesPayload(created.id, { role: 'member', userId: alice[0]!.id });
+		expect(stillOwner?.wishes[0]).not.toHaveProperty('isFunded');
+		expect(stillOwner?.wishes[0]).not.toHaveProperty('fundedPercent');
+		expect(JSON.stringify(stillOwner)).not.toContain('Paul');
+		expect(JSON.stringify(stillOwner)).not.toContain('Marc');
 	});
 });

@@ -10,6 +10,14 @@ import {
 	updateList,
 	updateWish
 } from '#lib/server/lists';
+import {
+	claimOrganizer,
+	completeRest,
+	markSharedFunded,
+	markSharedPurchased,
+	pledge,
+	withdrawPledge
+} from '#lib/server/funding';
 import { urlBlockReason } from '#lib/server/net/ssrf';
 import { fetchLinkPreview } from '#lib/server/preview';
 import type { Viewer } from '#lib/server/secrecy/dto';
@@ -27,7 +35,9 @@ function wishInput(data: FormData) {
 		url: String(data.get('url') ?? ''),
 		description: String(data.get('description') ?? ''),
 		priority: Number(data.get('priority') ?? 2),
-		isSurprise: data.get('surprise') === '1'
+		isSurprise: data.get('surprise') === '1',
+		isShared: data.get('commun') === '1',
+		target: String(data.get('target') ?? '')
 	};
 }
 
@@ -153,6 +163,60 @@ export const actions: Actions = {
 		if (!user) return fail(401, { message: 'Connexion requise.' });
 		const data = await event.request.formData();
 		const result = await markPurchased(user.id, String(data.get('wishId') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${event.params.id}`);
+	},
+	participer: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { message: 'Connexion requise.' });
+		const data = await event.request.formData();
+		const result = await pledge({
+			userId: user.id,
+			wishId: String(data.get('wishId') ?? ''),
+			mode: String(data.get('mode') ?? 'montant'),
+			euros: String(data.get('euros') ?? ''),
+			fraction: String(data.get('part') ?? '')
+		});
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${event.params.id}`);
+	},
+	retirerPart: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { message: 'Connexion requise.' });
+		const data = await event.request.formData();
+		const result = await withdrawPledge(user.id, String(data.get('wishId') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${event.params.id}`);
+	},
+	occuper: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { message: 'Connexion requise.' });
+		const data = await event.request.formData();
+		const result = await claimOrganizer(user.id, String(data.get('wishId') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${event.params.id}`);
+	},
+	completer: async (event) => {
+		const user = event.locals.user;
+		if (!user) return fail(401, { message: 'Connexion requise.' });
+		const data = await event.request.formData();
+		const result = await completeRest(user.id, String(data.get('wishId') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${event.params.id}`);
+	},
+	finance: async (event) => {
+		const viewer = viewerOf(event.locals);
+		if (!viewer) return fail(401, { message: 'Connexion requise.' });
+		const data = await event.request.formData();
+		const result = await markSharedFunded(viewer, String(data.get('wishId') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${event.params.id}`);
+	},
+	acheteCommun: async (event) => {
+		const viewer = viewerOf(event.locals);
+		if (!viewer) return fail(401, { message: 'Connexion requise.' });
+		const data = await event.request.formData();
+		const result = await markSharedPurchased(viewer, String(data.get('wishId') ?? ''));
 		if (!result.ok) return fail(400, { message: result.message });
 		redirect(303, `/listes/${event.params.id}`);
 	},

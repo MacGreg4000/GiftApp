@@ -75,6 +75,7 @@ export type WishDto = {
 	organizerName?: string | null;
 	myContribution?: Pledge | null;
 	pledges?: Pledge[];
+	iOrganize?: boolean;
 };
 
 function fractionValue(item: ContributionRecord): number {
@@ -179,6 +180,7 @@ export function serializeWish(
 	};
 	if (aggregates.participantCount >= 2) dto.participantCount = aggregates.participantCount;
 	if (wish.organizerId) dto.organizerName = organizerName;
+	if (isOrganizer) dto.iOrganize = true;
 	if (viewer.role === 'admin' || isOrganizer) {
 		dto.pledges = contributions.map(toPledge);
 	}

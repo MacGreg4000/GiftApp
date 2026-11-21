@@ -8,6 +8,7 @@ import {
 	groupStats,
 	regeneratePin,
 	removeMember,
+	contributionsForGroup,
 	reservationsForGroup,
 	unlockMember,
 	updateGroup,
@@ -86,6 +87,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	}
 	const stats = current ? await groupStats(current.id) : null;
 	const taken = current ? await reservationsForGroup(current.id) : [];
+	const pledges = current ? await contributionsForGroup(current.id) : [];
 	const journal =
 		section.sub === 'journal'
 			? await getDb().select().from(auditLog).orderBy(desc(auditLog.at)).limit(200)
@@ -103,6 +105,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		sessions,
 		stats,
 		taken,
+		pledges,
 		lists,
 		journal,
 		backup: backup

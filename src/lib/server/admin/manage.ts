@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { audit } from '../auth/audit';
 import { hashPin } from '../auth/crypto';
@@ -6,7 +6,7 @@ import { foldName, generatePin, suggestLoginName } from '../auth/pin';
 import { revokeUserSessions } from '../auth/session';
 import { getConfig } from '../config';
 import { getDb } from '../db/client';
-import { appGroup, appUser, groupMember, reservation, wish, wishList } from '../db/schema';
+import { appGroup, appUser, contribution, groupMember, reservation, wish, wishList } from '../db/schema';
 
 const ACCENTS = new Set(['brique', 'sapin', 'or', 'corail', 'sarcelle', 'soleil']);
 
@@ -247,6 +247,30 @@ export async function reservationsForGroup(groupId: string) {
 		.innerJoin(owner, eq(owner.id, wish.ownerId))
 		.where(eq(wishList.groupId, groupId))
 		.orderBy(desc(reservation.createdAt));
+}
+
+export async function contributionsForGroup(groupId: string) {
+	const member = alias(appUser, 'member');
+	const owner = alias(appUser, 'gift_owner');
+	return getDb()
+		.select({
+			title: wish.title,
+			ownerName: owner.displayName,
+			memberName: member.displayName,
+			amountCents: contribution.amountCents,
+			fractionNum: contribution.fractionNum,
+			fractionDen: contribution.fractionDen,
+			listTitle: wishList.title,
+			funded: wish.fundedAt,
+			purchased: wish.purchasedAt
+		})
+		.from(contribution)
+		.innerJoin(wish, eq(contribution.wishId, wish.id))
+		.innerJoin(wishList, eq(wish.listId, wishList.id))
+		.innerJoin(member, eq(member.id, contribution.memberId))
+		.innerJoin(owner, eq(owner.id, wish.ownerId))
+		.where(and(eq(wishList.groupId, groupId), isNull(wish.deletedAt)))
+		.orderBy(desc(contribution.updatedAt));
 }
 
 export { ACCENTS };

@@ -6,6 +6,7 @@
 	import { LIST_THEMES, THEME_LABELS, themeArt } from '#lib/palette';
 	import { daysUntil, formatEventDate } from '#lib/format';
 	import { reservationText } from '#lib/reservation-label';
+	import { formatEuros } from '#lib/money';
 
 	let { data, form } = $props();
 	type ListedWish = (typeof data.page.wishes)[number];
@@ -44,6 +45,8 @@
 	let description = $state('');
 	let priority = $state(2);
 	let surprise = $state(false);
+	let shared = $state(false);
+	let target = $state('');
 	let preview = $state<{ title: string | null; siteName: string | null; photoId: string | null } | null>(null);
 	let saving = $state(false);
 	let requestKey = $state('');
@@ -55,6 +58,8 @@
 		description = '';
 		priority = 2;
 		surprise = false;
+		shared = false;
+		target = '';
 		preview = null;
 		saving = false;
 		requestKey = crypto.randomUUID();
@@ -68,6 +73,8 @@
 		description = wish.description ?? '';
 		priority = wish.priority;
 		surprise = wish.isSurprise;
+		shared = Boolean(wish.isShared);
+		target = wish.targetAmountCents ? (wish.targetAmountCents / 100).toFixed(2).replace('.', ',') : '';
 		preview = null;
 		box?.showModal();
 	}
@@ -198,10 +205,119 @@
 									{/each}
 								</span>
 							</div>
+							{#if wish.isShared}<p class="shared-badge">Cadeau commun</p>{/if}
 							{#if wish.isSurprise}<p class="quiet">Cadeau surprise</p>{/if}
 							{#if wish.description}<p>{wish.description}</p>{/if}
 							{#if wish.url && !wish.isSurprise}
 								<p><a href={wish.url} target="_blank" rel="noopener noreferrer">Voir le lien</a></p>
+							{/if}
+							{#if wish.isShared && wish.fundedPercent !== undefined}
+								{#if wish.targetAmountCents}
+									<p class="quiet">Visé {formatEuros(wish.targetAmountCents)}{#if wish.fundedTotalCents != null} · promis {formatEuros(wish.fundedTotalCents)}{/if}</p>
+								{:else if wish.fundedTotalCents != null}
+									<p class="quiet">Promis {formatEuros(wish.fundedTotalCents)}</p>
+								{/if}
+								<div class="meter" aria-label="Progression du cadeau commun">
+									<span style:width="{Math.min(wish.fundedPercent ?? 0, 100)}%"></span>
+								</div>
+								<p class="quiet">
+									{wish.fundedPercent ?? 0} %
+									{#if wish.participantCount} · {wish.participantCount} participants{/if}
+									{#if wish.isFunded} · financé{/if}
+									{#if wish.purchased} · acheté{/if}
+								</p>
+								{#if wish.organizerName}<p class="quiet">Organisé par {wish.organizerName}</p>{/if}
+								{#if wish.myContribution}
+									<p class="quiet">
+										Votre part :
+										{wish.myContribution.amountCents != null
+											? formatEuros(wish.myContribution.amountCents)
+											: `${wish.myContribution.fractionNum}/${wish.myContribution.fractionDen}`}
+									</p>
+								{/if}
+								{#if wish.pledges}
+									<ul class="plain-list">
+										{#each wish.pledges as pledge}
+											<li>
+												{pledge.memberName}
+												<span class="quiet">
+													{pledge.amountCents != null ? formatEuros(pledge.amountCents) : `${pledge.fractionNum}/${pledge.fractionDen}`}
+												</span>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+								{#if !wish.purchased && !data.page.archived && data.page.viewerId !== wish.ownerId}
+									<form method="post" action="?/participer" class="stack">
+										<input type="hidden" name="wishId" value={wish.id} />
+										<label>Je participe
+											<select name="mode">
+												<option value="montant">Un montant</option>
+												<option value="part">Une part</option>
+											</select>
+										</label>
+										<label>Montant (€)<input name="euros" inputmode="decimal" placeholder="15" /></label>
+										<label>Part
+											<select name="part">
+												<option value="1/2">1/2</option>
+												<option value="1/3">1/3</option>
+												<option value="1/4">1/4</option>
+												<option value="1/5">1/5</option>
+												<option value="1/10">1/10</option>
+											</select>
+										</label>
+										<button class="btn small" type="submit">Enregistrer ma part</button>
+									</form>
+									{#if wish.myContribution}
+										<form method="post" action="?/retirerPart">
+											<input type="hidden" name="wishId" value={wish.id} />
+											<button class="btn ghost small" type="submit">Retirer ma part</button>
+										</form>
+									{/if}
+									<div class="card-actions">
+										{#if !wish.organizerName}
+											<form method="post" action="?/occuper">
+												<input type="hidden" name="wishId" value={wish.id} />
+												<button class="btn soft small" type="submit">Je m’en occupe</button>
+											</form>
+										{/if}
+										{#if wish.targetAmountCents && !wish.isFunded && (!wish.organizerName || wish.iOrganize)}
+											<form method="post" action="?/completer">
+												<input type="hidden" name="wishId" value={wish.id} />
+												<button class="btn soft small" type="submit">Compléter le reste</button>
+											</form>
+										{/if}
+										{#if wish.iOrganize && !wish.isFunded}
+											<form method="post" action="?/finance">
+												<input type="hidden" name="wishId" value={wish.id} />
+												<button class="btn soft small" type="submit">C’est financé</button>
+											</form>
+										{/if}
+										{#if wish.iOrganize && wish.isFunded}
+											<form method="post" action="?/acheteCommun">
+												<input type="hidden" name="wishId" value={wish.id} />
+												<button class="btn small" type="submit">C’est acheté</button>
+											</form>
+										{/if}
+									</div>
+								{/if}
+								{#if data.page.role === 'admin' && !data.page.archived}
+									<div class="card-actions">
+										{#if !wish.isFunded}
+											<form method="post" action="?/finance">
+												<input type="hidden" name="wishId" value={wish.id} />
+												<button class="btn soft small" type="submit">Marquer financé</button>
+											</form>
+										{:else if !wish.purchased}
+											<form method="post" action="?/acheteCommun">
+												<input type="hidden" name="wishId" value={wish.id} />
+												<button class="btn small" type="submit">Marquer acheté</button>
+											</form>
+										{/if}
+									</div>
+								{/if}
+							{:else if wish.isShared && wish.targetAmountCents && data.page.viewerId === wish.ownerId}
+								<p class="quiet">Montant visé {formatEuros(wish.targetAmountCents)}</p>
 							{/if}
 							{#if label && wish.card === 'pris'}
 								<p class="taken-badge">{label}</p>
@@ -324,6 +440,16 @@
 			Surprenez-moi — une idée vague, sans objet précis
 		</label>
 		{#if surprise}<p class="quiet">Le lien reste facultatif. La carte s’affiche comme un cadeau mystère.</p>{/if}
+		<label class="choice">
+			<input type="checkbox" name="commun" value="1" bind:checked={shared} />
+			Cadeau commun — plusieurs personnes peuvent participer
+		</label>
+		{#if shared}
+			<label>Montant visé <span class="quiet">facultatif, en euros</span>
+				<input name="target" bind:value={target} inputmode="decimal" placeholder="40" />
+			</label>
+			<p class="quiet">Vous ne verrez ni les parts, ni qui s’en occupe. Les autres voient seulement la progression.</p>
+		{/if}
 		<button class="btn" type="submit" formaction={editing ? '?/updateWish' : '?/createWish'} disabled={saving}>
 			{saving ? 'Enregistrement…' : 'Enregistrer'}
 		</button>

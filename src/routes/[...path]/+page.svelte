@@ -4,6 +4,7 @@
 	import Avatar from '#lib/components/Avatar.svelte';
 	import { ACCENT_COLORS, THEME_LABELS } from '#lib/palette';
 	import { formatWhen, lockLabel } from '#lib/format';
+	import { formatEuros } from '#lib/money';
 
 	let { data, form } = $props();
 	let copied = $state(false);
@@ -230,6 +231,25 @@
 											<td>{row.ownerName}</td>
 											<td>{row.buyerName}</td>
 											<td>{formatWhen(new Date(row.at))}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						{/if}
+						<hr />
+						<h3>Cadeaux communs</h3>
+						{#if data.pledges.length === 0}
+							<p class="empty-inline">Aucune participation pour le moment.</p>
+						{:else}
+							<table>
+								<thead><tr><th>Cadeau</th><th>Pour</th><th>Participe</th><th>Part</th></tr></thead>
+								<tbody>
+									{#each data.pledges as row}
+										<tr>
+											<td>{row.title}<br /><small class="quiet">{row.listTitle}{row.funded ? ' · financé' : ''}{row.purchased ? ' · acheté' : ''}</small></td>
+											<td>{row.ownerName}</td>
+											<td>{row.memberName}</td>
+											<td>{row.amountCents != null ? formatEuros(row.amountCents) : `${row.fractionNum}/${row.fractionDen}`}</td>
 										</tr>
 									{/each}
 								</tbody>

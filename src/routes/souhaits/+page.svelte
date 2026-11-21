@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Header from '#lib/components/Header.svelte';
+	import { formatEuros } from '#lib/money';
 
 	let { data, form } = $props();
 </script>
@@ -21,7 +22,32 @@
 				{#each data.wishes as wish}
 					<li>
 						<a href="/listes/{wish.listId}">{wish.title}</a>
-						<span class="quiet">{wish.listTitle} · {wish.groupName}{#if wish.isSurprise} · surprise{/if}</span>
+						<span class="quiet">{wish.listTitle} · {wish.groupName}{#if wish.isSurprise} · surprise{/if}{#if wish.isShared} · cadeau commun{/if}</span>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
+	<section class="table-card">
+		<h2>Mes participations</h2>
+		{#if data.pledges.length === 0}
+			<p class="empty-inline">Vous ne participez à aucun cadeau commun.</p>
+		{:else}
+			<ul class="plain-list">
+				{#each data.pledges as item}
+					<li>
+						<a href="/listes/{item.listId}">{item.title}</a>
+						<span class="quiet">
+							Pour {item.ownerName} · {item.listTitle} ·
+							{item.amountCents != null ? formatEuros(item.amountCents) : `${item.fractionNum}/${item.fractionDen}`}
+							{#if item.purchased} · acheté{:else if item.funded} · financé{/if}
+						</span>
+						{#if !item.purchased}
+							<form method="post" action="?/retirerPart">
+								<input type="hidden" name="wishId" value={item.wishId} />
+								<button class="btn ghost small" type="submit">Retirer ma part</button>
+							</form>
+						{/if}
 					</li>
 				{/each}
 			</ul>

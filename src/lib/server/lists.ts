@@ -3,7 +3,9 @@ import { siteDomain } from '../domain';
 import { reservationCard, type ReservationCard } from '../reservation-label';
 import { audit } from './auth/audit';
 import { getDb } from './db/client';
-import { appGroup, appUser, groupMember, photo, reservation, wish, wishList } from './db/schema';
+import { appGroup, appUser, contribution, groupMember, photo, reservation, wish, wishList } from './db/schema';
+import { parseEurosToCents } from '../money';
+import { contributionCount, contributionsOf } from './funding';
 import type { LinkPreview } from './db/schema';
 import { PhotoError, storeImage } from './photos';
 import { listProgressForViewer, type WishProgress } from './secrecy/progress';
@@ -256,6 +258,13 @@ type WishFields = {
 	isSurprise: boolean;
 };
 
+function sharedPlan(input: { isShared: boolean; target: string }): { isShared: boolean; targetAmountCents: number | null } | { message: string } {
+	if (!input.isShared) return { isShared: false, targetAmountCents: null };
+	const cents = parseEurosToCents(input.target);
+	if (cents === 'bad') return { message: 'Le montant visé est un nombre d’euros, par exemple 40 ou 40,50.' };
+	return { isShared: true, targetAmountCents: cents };
+}
+
 function wishFields(input: {
 	title: string;
 	url: string;
@@ -340,6 +349,8 @@ export async function createWish(input: {
 	description: string;
 	priority: number;
 	isSurprise: boolean;
+	isShared?: boolean;
+	target?: string;
 	photo?: Buffer | null;
 	preview?: { title?: string | null; siteName?: string | null; photoId?: string | null } | null;
 	idempotencyKey?: string | null;
@@ -352,6 +363,8 @@ export async function createWish(input: {
 	}
 	const fields = wishFields(input);
 	if ('message' in fields) return { ok: false, message: fields.message };
+	const shared = sharedPlan({ isShared: input.isShared ?? false, target: input.target ?? '' });
+	if ('message' in shared) return { ok: false, message: shared.message };
 	const idempotencyKey = cleanIdempotencyKey(input.idempotencyKey);
 	if (idempotencyKey) {
 		const already = await wishIdForKey(input.userId, idempotencyKey);
@@ -379,6 +392,8 @@ export async function createWish(input: {
 				description: fields.description,
 				priority: fields.priority,
 				isSurprise: fields.isSurprise,
+				isShared: shared.isShared,
+				targetAmountCents: shared.targetAmountCents,
 				photoId,
 				linkPreview,
 				position: Number(position[0]?.next ?? 0),
@@ -411,6 +426,8 @@ export async function updateWish(input: {
 	description: string;
 	priority: number;
 	isSurprise: boolean;
+	isShared?: boolean;
+	target?: string;
 	photo?: Buffer | null;
 	removePhoto?: boolean;
 	preview?: { title?: string | null; siteName?: string | null; photoId?: string | null } | null;
@@ -422,7 +439,8 @@ export async function updateWish(input: {
 			ownerId: wish.ownerId,
 			listId: wish.listId,
 			photoId: wish.photoId,
-			linkPreview: wish.linkPreview
+			linkPreview: wish.linkPreview,
+			isShared: wish.isShared
 		})
 		.from(wish)
 		.where(and(eq(wish.id, input.wishId), isNull(wish.deletedAt)))
@@ -433,6 +451,11 @@ export async function updateWish(input: {
 	if (!list || list.archivedAt) return { ok: false, message: 'Cette liste est archivée.' };
 	const fields = wishFields(input);
 	if ('message' in fields) return { ok: false, message: fields.message };
+	const shared = sharedPlan({ isShared: input.isShared ?? current.isShared, target: input.target ?? '' });
+	if ('message' in shared) return { ok: false, message: shared.message };
+	if (!shared.isShared && current.isShared && (await contributionCount(current.id)) > 0) {
+		return { ok: false, message: 'Des participations existent déjà : le cadeau commun reste en place.' };
+	}
 	let photoId = input.removePhoto ? null : current.photoId;
 	try {
 		const uploaded = await saveUpload(input.userId, input.photo);
@@ -450,11 +473,17 @@ export async function updateWish(input: {
 				description: fields.description,
 				priority: fields.priority,
 				isSurprise: fields.isSurprise,
+				isShared: shared.isShared,
+				targetAmountCents: shared.targetAmountCents,
+				fundedAt: shared.isShared ? undefined : null,
+				organizerId: shared.isShared ? undefined : null,
+				purchasedAt: shared.isShared ? undefined : null,
 				photoId,
 				linkPreview: preview ?? current.linkPreview,
 				updatedAt: new Date()
 			})
 			.where(eq(wish.id, current.id));
+		if (shared.isShared) await tx.delete(reservation).where(eq(reservation.wishId, current.id));
 		await tx
 			.update(reservation)
 			.set({ wishUpdatedAfter: true, updatedAt: new Date() })
@@ -587,6 +616,10 @@ export async function loadListPage(listId: string, viewer: Viewer): Promise<List
 		.where(and(eq(wish.listId, list.id), isNull(wish.deletedAt)));
 	const byWish = new Map(reserved.map((row) => [row.wishId, row]));
 	const labels = new Map(members.map((member) => [member.id, member.label]));
+	const names = new Map(members.map((member) => [member.id, member.displayName]));
+	const giftRows = wishRows.filter((row) => row.isShared);
+	const gifts = new Map<string, Awaited<ReturnType<typeof contributionsOf>>>();
+	for (const row of giftRows) gifts.set(row.id, await contributionsOf(row.id));
 	const wishes: ListedWish[] = wishRows.map((row) => {
 		const record: WishRecord = {
 			id: row.id,
@@ -615,7 +648,13 @@ export async function loadListPage(listId: string, viewer: Viewer): Promise<List
 					createdAt: held.createdAt.toISOString()
 				}
 			: null;
-		const dto = serializeWish(record, reservationRecord, [], viewer);
+		const dto = serializeWish(
+			record,
+			reservationRecord,
+			gifts.get(row.id) ?? [],
+			viewer,
+			row.organizerId ? (names.get(row.organizerId) ?? null) : null
+		);
 		const images = imageUrls(row.photoId, row.linkPreview?.image_photo_id, row.isSurprise);
 		const hideSurpriseLink =
 			row.isSurprise && viewer.role !== 'admin' && (viewer.role !== 'member' || viewer.userId !== row.ownerId);
@@ -633,7 +672,7 @@ export async function loadListPage(listId: string, viewer: Viewer): Promise<List
 		id: row.id,
 		listId: row.listId,
 		ownerId: row.ownerId,
-		taken: byWish.has(row.id)
+		taken: byWish.has(row.id) || Boolean(row.isShared && (row.fundedAt || row.purchasedAt))
 	}));
 	const progressViewer = viewer.role === 'member' ? viewer.userId : '00000000-0000-0000-0000-000000000000';
 	const recipient = list.recipientId ? members.find((member) => member.id === list.recipientId) : undefined;
@@ -705,6 +744,8 @@ export async function mySpace(userId: string) {
 			title: wish.title,
 			priority: wish.priority,
 			isSurprise: wish.isSurprise,
+			isShared: wish.isShared,
+			targetAmountCents: wish.targetAmountCents,
 			listId: wishList.id,
 			listTitle: wishList.title,
 			groupName: appGroup.name
@@ -731,8 +772,39 @@ export async function mySpace(userId: string) {
 		.innerJoin(wishList, eq(wishList.id, wish.listId))
 		.where(eq(reservation.buyerId, userId))
 		.orderBy(desc(reservation.createdAt));
+	const pledges = await getDb()
+		.select({
+			wishId: wish.id,
+			title: wish.title,
+			ownerName: appUser.displayName,
+			listId: wishList.id,
+			listTitle: wishList.title,
+			amountCents: contribution.amountCents,
+			fractionNum: contribution.fractionNum,
+			fractionDen: contribution.fractionDen,
+			funded: wish.fundedAt,
+			purchased: wish.purchasedAt
+		})
+		.from(contribution)
+		.innerJoin(wish, eq(wish.id, contribution.wishId))
+		.innerJoin(appUser, eq(appUser.id, wish.ownerId))
+		.innerJoin(wishList, eq(wishList.id, wish.listId))
+		.where(and(eq(contribution.memberId, userId), isNull(wish.deletedAt)))
+		.orderBy(desc(contribution.updatedAt));
 	return {
 		wishes: mine,
+		pledges: pledges.map((row) => ({
+			wishId: row.wishId,
+			title: row.title,
+			ownerName: row.ownerName,
+			listId: row.listId,
+			listTitle: row.listTitle,
+			amountCents: row.amountCents,
+			fractionNum: row.fractionNum,
+			fractionDen: row.fractionDen,
+			funded: Boolean(row.funded),
+			purchased: Boolean(row.purchased)
+		})),
 		buying: buying.map((row) => ({
 			wishId: row.wishId,
 			title: row.title,
