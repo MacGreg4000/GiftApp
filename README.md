@@ -15,7 +15,7 @@ chmod 600 .env
 docker compose up -d --build
 ```
 
-L’application écoute sur `127.0.0.1:3080` de la machine hôte. Postgres n’est pas publié sur le réseau. Ouvrez `http://127.0.0.1:3080` : tant que l’installation n’est pas finie, vous arrivez sur `/installation`.
+L’application écoute sur `127.0.0.1:8091` de la machine hôte (`APP_PORT`, défaut 8091). Postgres n’est pas publié sur le réseau. Ouvrez `http://127.0.0.1:8091` : tant que l’installation n’est pas finie, vous arrivez sur `/installation`.
 
 Le code d’installation est écrit dans les journaux et dans `data/uploads/setup-token` (droits 600) :
 
@@ -33,6 +33,7 @@ Pour l’essayer en famille : créez un groupe, deux membres, notez les codes à
 
 | Variable | Rôle |
 | --- | --- |
+| `APP_PORT` | Port de l’hôte publié vers le conteneur (défaut `8091`). Le processus dans le conteneur reste sur `3000`. |
 | `DB_PASSWORD` | Mot de passe Postgres. Le défaut du fichier compose est un secret de développement. |
 | `PIN_PEPPER` | Au moins 32 caractères. Entre dans le HMAC du code PIN avant argon2id. |
 | `TOTP_KEY` | 64 caractères hexadécimaux. Chiffre le secret TOTP (AES-256-GCM). |
@@ -51,11 +52,11 @@ L’application ne définit pas la variable SvelteKit `ADDRESS_HEADER`. Sans l�
 
 ## Reverse proxy
 
-Le conteneur n’écoute que sur la boucle locale de l’hôte (`127.0.0.1:3080`). Le proxy termine TLS et transmet la requête. Il doit envoyer l’adresse réelle du visiteur, le protocole et l’hôte, et **remplacer** `X-Forwarded-For` plutôt que d’y ajouter une valeur fournie par le client.
+Le conteneur n’écoute que sur la boucle locale de l’hôte (`127.0.0.1:8091`). Le proxy termine TLS et transmet la requête. Il doit envoyer l’adresse réelle du visiteur, le protocole et l’hôte, et **remplacer** `X-Forwarded-For` plutôt que d’y ajouter une valeur fournie par le client.
 
 ### Nginx Proxy Manager
 
-Proxy Host vers `127.0.0.1:3080`, schéma HTTP, certificats Let’s Encrypt. Dans l’onglet Advanced :
+Proxy Host vers `127.0.0.1:8091`, schéma HTTP, certificats Let’s Encrypt. Dans l’onglet Advanced :
 
 ```nginx
 proxy_set_header Host $host;
@@ -70,7 +71,7 @@ client_max_body_size 2m;
 
 ### DSM (Synology)
 
-Dans Portail de connexion → Avancé → Proxy inverse : source HTTPS, nom de domaine public, destination HTTP `localhost` port `3080`. En-têtes personnalisés :
+Dans Portail de connexion → Avancé → Proxy inverse : source HTTPS, nom de domaine public, destination HTTP `localhost` port `8091`. En-têtes personnalisés :
 
 - `X-Forwarded-Proto` = `$scheme` (ou `https`)
 - `X-Forwarded-For` = `$remote_addr`
@@ -90,7 +91,7 @@ http:
     souhaits:
       loadBalancer:
         servers:
-          - url: http://127.0.0.1:3080
+          - url: http://127.0.0.1:8091
 ```
 
 Traefik ajoute `X-Forwarded-For` et `X-Forwarded-Proto`. Avec un seul saut, laissez `XFF_DEPTH=1`.

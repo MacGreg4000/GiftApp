@@ -43,7 +43,7 @@ export function getConfig(): AppConfig {
 		pinPepper,
 		totpKey,
 		adminPath: normalizeAdminPath(process.env.ADMIN_PATH),
-		origin: process.env.ORIGIN ?? 'http://127.0.0.1:3080',
+		origin: process.env.ORIGIN ?? 'http://127.0.0.1:8091',
 		uploadDir,
 		backupDir,
 		setupTokenFile: process.env.SETUP_TOKEN_FILE ?? './data/uploads/setup-token',

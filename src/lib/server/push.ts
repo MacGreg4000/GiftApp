@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { and, eq, isNull } from 'drizzle-orm';
-import webpush from 'web-push';
+import { sendNotification, setVapidDetails } from 'web-push';
 import { eventOffsetDays } from '../format';
 import { noticeText, readPrefs, recipients, type Notice, type NoticeKind } from '../notify-copy';
 import { getConfig, pushConfigured } from './config';
@@ -13,7 +13,7 @@ let vapidReady = false;
 function ensureVapid() {
 	if (vapidReady) return;
 	const config = getConfig();
-	webpush.setVapidDetails(config.vapidSubject || 'mailto:admin@localhost', config.vapidPublicKey, config.vapidPrivateKey);
+	setVapidDetails(config.vapidSubject || 'mailto:admin@localhost', config.vapidPublicKey, config.vapidPrivateKey);
 	vapidReady = true;
 }
 
@@ -123,7 +123,7 @@ async function deliver(userId: string, text: ReturnType<typeof noticeText>) {
 			continue;
 		}
 		try {
-			await webpush.sendNotification(
+			await sendNotification(
 				{ endpoint, keys: { p256dh: device.p256dh, auth: device.authSecret } },
 				payload
 			);

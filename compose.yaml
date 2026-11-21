@@ -12,7 +12,7 @@ services:
     init: true
     environment:
       DATABASE_URL: postgres://wishlist:${DB_PASSWORD:-wishlist-dev-password}@db:5432/wishlist
-      ORIGIN: ${ORIGIN:-http://127.0.0.1:3080}
+      ORIGIN: ${ORIGIN:-http://127.0.0.1:8091}
       PIN_PEPPER: ${PIN_PEPPER:-dev-pepper-change-me-not-for-production-use!!}
       TOTP_KEY: ${TOTP_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       ADMIN_PATH: ${ADMIN_PATH:-/gestion}
@@ -35,7 +35,7 @@ services:
       - ./data:/data
       - ./backups:/data/backups:ro
     ports:
-      - "127.0.0.1:3080:3000"
+      - "127.0.0.1:${APP_PORT:-8091}:3000"
     depends_on:
       db:
         condition: service_healthy
