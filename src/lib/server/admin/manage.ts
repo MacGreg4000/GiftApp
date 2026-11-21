@@ -2,7 +2,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { audit } from '../auth/audit';
 import { hashPin } from '../auth/crypto';
-import { foldName, generatePin, suggestLoginName } from '../auth/pin';
+import { foldName, pinProblem, suggestLoginName, suggestPin } from '../auth/pin';
 import { revokeUserSessions } from '../auth/session';
 import { getConfig } from '../config';
 import { getDb } from '../db/client';
@@ -57,11 +57,35 @@ export async function deleteGroup(id: string) {
 	return { ok: true as const };
 }
 
+function chosenPin(raw: string): { ok: true; pin: string } | { ok: false; message: string } {
+	const problem = pinProblem(raw);
+	if (problem) return { ok: false, message: problem };
+	const digits = raw.replace(/\D/g, '');
+	return { ok: true, pin: digits || suggestPin() };
+}
+
+async function storePin(userId: string, pin: string) {
+	const pinHash = await hashPin(pin, getConfig().pinPepper);
+	await getDb()
+		.update(appUser)
+		.set({
+			pinHash,
+			pinSetAt: new Date(),
+			failedPinCount: 0,
+			lockLevel: 0,
+			lockedUntil: null
+		})
+		.where(eq(appUser.id, userId));
+	await revokeUserSessions(userId);
+	await getDb().execute(sql`DELETE FROM push_subscription WHERE user_id = ${userId}`);
+}
+
 export async function addMember(input: {
 	groupId: string;
 	displayName: string;
 	loginName: string;
 	label: string;
+	pin: string;
 }) {
 	const displayName = input.displayName.trim();
 	if (displayName.length < 1 || displayName.length > 60) {
@@ -80,6 +104,9 @@ export async function addMember(input: {
 		return { ok: false as const, message: 'Le prénom de connexion ne peut contenir que des lettres, chiffres, points et tirets.' };
 	}
 
+	const picked = chosenPin(input.pin);
+	if (!picked.ok) return picked;
+
 	const existing = await getDb().select().from(appUser).where(eq(appUser.loginName, loginName)).limit(1);
 	if (existing[0]) {
 		await getDb()
@@ -89,6 +116,7 @@ export async function addMember(input: {
 				target: [groupMember.groupId, groupMember.userId],
 				set: { label: label || null }
 			});
+		if (input.pin.replace(/\D/g, '')) await storePin(existing[0].id, picked.pin);
 		await audit({
 			actor: 'admin',
 			action: 'member.attach',
@@ -100,11 +128,11 @@ export async function addMember(input: {
 			attached: true,
 			displayName: existing[0].displayName,
 			loginName: existing[0].loginName,
-			pin: null as string | null
+			pin: input.pin.replace(/\D/g, '') ? picked.pin : (null as string | null)
 		};
 	}
 
-	const pin = generatePin();
+	const pin = picked.pin;
 	const pinHash = await hashPin(pin, getConfig().pinPepper);
 	const created = await getDb()
 		.insert(appUser)
@@ -157,28 +185,27 @@ export async function updateMember(input: {
 	return { ok: true as const };
 }
 
-export async function regeneratePin(userId: string) {
-	const pin = generatePin();
-	const pinHash = await hashPin(pin, getConfig().pinPepper);
-	await getDb()
-		.update(appUser)
-		.set({
-			pinHash,
-			pinSetAt: new Date(),
-			failedPinCount: 0,
-			lockLevel: 0,
-			lockedUntil: null
-		})
-		.where(eq(appUser.id, userId));
-	await revokeUserSessions(userId);
-	await getDb().execute(sql`DELETE FROM push_subscription WHERE user_id = ${userId}`);
-	await audit({ actor: 'admin', action: 'pin.regenerate', targetId: userId });
+export async function setMemberPin(userId: string, raw: string) {
+	const picked = chosenPin(raw);
+	if (!picked.ok) return picked;
 	const user = await getDb()
 		.select({ displayName: appUser.displayName, loginName: appUser.loginName })
 		.from(appUser)
 		.where(eq(appUser.id, userId))
 		.limit(1);
-	return { ok: true as const, pin, displayName: user[0]?.displayName ?? '', loginName: user[0]?.loginName ?? '' };
+	if (!user[0]) return { ok: false as const, message: 'Membre introuvable.' };
+	await storePin(userId, picked.pin);
+	await audit({ actor: 'admin', action: raw.replace(/\D/g, '') ? 'pin.set' : 'pin.regenerate', targetId: userId });
+	return {
+		ok: true as const,
+		pin: picked.pin,
+		displayName: user[0].displayName,
+		loginName: user[0].loginName
+	};
+}
+
+export async function regeneratePin(userId: string) {
+	return setMemberPin(userId, '');
 }
 
 export async function unlockMember(userId: string) {

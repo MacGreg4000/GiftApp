@@ -128,11 +128,8 @@ export async function createList(input: {
 		.limit(1);
 	const group = groups[0];
 	if (!group || group.archivedAt) return { ok: false, message: 'Ce groupe n’accepte plus de liste.' };
-	if (input.actor.role !== 'member') {
-		return { ok: false, message: 'Un membre du groupe crée la liste.' };
-	}
-	if (!(await memberOf(group.id, input.actor.userId))) {
-		return { ok: false, message: 'Vous n’êtes pas dans ce groupe.' };
+	if (input.actor.role !== 'admin') {
+		return { ok: false, message: 'Seul l’organisateur peut créer une liste.' };
 	}
 	if (recipientId && !(await memberOf(group.id, recipientId))) {
 		return { ok: false, message: 'La personne concernée doit faire partie du groupe.' };
@@ -145,19 +142,24 @@ export async function createList(input: {
 			theme: input.theme,
 			eventDate,
 			recipientId: recipientId || null,
-			createdBy: input.actor.userId
+			createdBy: null
 		})
 		.returning({ id: wishList.id });
 	const id = rows[0]!.id;
 	await audit({
-		actor: 'membre',
+		actor: 'admin',
 		action: 'list.create',
 		targetId: id,
-		details: { userId: input.actor.userId, theme: input.theme }
+		details: { theme: input.theme }
 	});
 	try {
 		const { noteNewList } = await import('./push');
-		await noteNewList({ groupId: group.id, listId: id, listTitle: title, actorId: input.actor.userId });
+		await noteNewList({
+			groupId: group.id,
+			listId: id,
+			listTitle: title,
+			actorId: null
+		});
 	} catch (error) {
 		console.error(error);
 	}

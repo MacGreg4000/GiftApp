@@ -16,7 +16,8 @@
 	<section class="table-card">
 		<h2>Mes idées</h2>
 		{#if data.wishes.length === 0}
-			<p class="empty-inline">Vous n’avez encore rien demandé. Ouvrez une liste du groupe et touchez +.</p>
+			<p class="empty-inline">Vous n’avez encore rien demandé.</p>
+			<p><a class="btn small" href="/accueil">Voir mes groupes</a></p>
 		{:else}
 			<ul class="plain-list">
 				{#each data.wishes as wish}
@@ -32,6 +33,7 @@
 		<h2>Mes participations</h2>
 		{#if data.pledges.length === 0}
 			<p class="empty-inline">Vous ne participez à aucun cadeau commun.</p>
+			<p><a class="btn small" href="/accueil">Voir les listes</a></p>
 		{:else}
 			<ul class="plain-list">
 				{#each data.pledges as item}

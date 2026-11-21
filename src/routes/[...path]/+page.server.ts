@@ -6,8 +6,8 @@ import {
 	createGroup,
 	deleteGroup,
 	groupStats,
-	regeneratePin,
 	removeMember,
+	setMemberPin,
 	contributionsForGroup,
 	reservationsForGroup,
 	unlockMember,
@@ -15,13 +15,13 @@ import {
 	updateMember
 } from '#lib/server/admin/manage';
 import { verifyAdminStepUp, loginAdmin } from '#lib/server/auth/login';
-import { applySessionCookie, listUserSessions, revokeSession } from '#lib/server/auth/session';
+import { applySessionCookie, listUserSessions, markStepUp, revokeSession, stepUpFresh } from '#lib/server/auth/session';
 import { latestBackup } from '#lib/server/backup';
 import { getConfig } from '#lib/server/config';
 import { getDb } from '#lib/server/db/client';
 import { appGroup, appUser, auditLog, groupMember } from '#lib/server/db/schema';
 import { requestIp } from '#lib/server/http';
-import { adminListRegister, setListArchived } from '#lib/server/lists';
+import { adminListRegister, createList, setListArchived } from '#lib/server/lists';
 import type { Actions, PageServerLoad } from './$types';
 
 const ADMIN_SECTIONS = ['', 'journal', 'parametres', 'listes', 'sauvegardes'] as const;
@@ -38,6 +38,15 @@ function adminSection(pathname: string): { sub: AdminSection; adminPath: string 
 
 async function requireAdmin(locals: App.Locals) {
 	if (!locals.isAdmin) return fail(403, { message: 'Connexion administrateur requise.' });
+	return null;
+}
+
+function requireStepUp(locals: App.Locals) {
+	if (!stepUpFresh(locals.stepUpUntil)) {
+		return fail(401, {
+			message: 'Confirmez d’abord avec le code de votre appli 2FA. Il reste valable 10 minutes.'
+		});
+	}
 	return null;
 }
 
@@ -92,6 +101,18 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		section.sub === 'journal'
 			? await getDb().select().from(auditLog).orderBy(desc(auditLog.at)).limit(200)
 			: [];
+	const people =
+		section.sub === '' || section.sub === 'listes'
+			? await getDb()
+					.select({
+						id: appUser.id,
+						displayName: appUser.displayName,
+						groupId: groupMember.groupId
+					})
+					.from(groupMember)
+					.innerJoin(appUser, eq(appUser.id, groupMember.userId))
+					.orderBy(appUser.displayName)
+			: [];
 	const lists = section.sub === 'listes' ? await adminListRegister() : [];
 	const backup = latestBackup(getConfig().backupDir);
 	return {
@@ -107,6 +128,8 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		taken,
 		pledges,
 		lists,
+		people,
+		stepUp: stepUpFresh(locals.stepUpUntil),
 		journal,
 		backup: backup
 			? { file: backup.file.split('/').slice(-2).join('/'), mtime: backup.mtime.toISOString(), stale: backup.stale }
@@ -167,9 +190,8 @@ export const actions: Actions = {
 		const denied = await requireAdmin(event.locals);
 		if (denied) return denied;
 		const data = await event.request.formData();
-		if (!(await verifyAdminStepUp(String(data.get('totp') ?? '')))) {
-			return fail(401, { message: 'Code d’authentification incorrect.' });
-		}
+		const fresh = requireStepUp(event.locals);
+		if (fresh) return fresh;
 		const id = String(data.get('id') ?? '');
 		const rows = await getDb().select({ name: appGroup.name }).from(appGroup).where(eq(appGroup.id, id)).limit(1);
 		if (rows[0]?.name !== String(data.get('confirm') ?? '')) {
@@ -182,11 +204,14 @@ export const actions: Actions = {
 		const denied = await requireAdmin(event.locals);
 		if (denied) return denied;
 		const data = await event.request.formData();
+		const fresh = requireStepUp(event.locals);
+		if (fresh) return fresh;
 		const result = await addMember({
 			groupId: String(data.get('groupId') ?? ''),
 			displayName: String(data.get('displayName') ?? ''),
 			loginName: String(data.get('loginName') ?? ''),
-			label: String(data.get('label') ?? '')
+			label: String(data.get('label') ?? ''),
+			pin: String(data.get('pin') ?? '')
 		});
 		if (!result.ok) return fail(400, { message: result.message });
 		return {
@@ -195,7 +220,9 @@ export const actions: Actions = {
 			loginName: result.loginName,
 			attached: result.attached,
 			message: result.attached
-				? `${result.displayName} est déjà connu·e : ajout au groupe, le code actuel reste valable.`
+				? result.pin
+					? `${result.displayName} était déjà connu·e. Le nouveau code remplace l’ancien, pour tous ses groupes.`
+					: `${result.displayName} est déjà connu·e : ajout au groupe, le code actuel reste valable.`
 				: null
 		};
 	},
@@ -214,15 +241,42 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { message: result.message });
 		return { message: 'Membre mis à jour.' };
 	},
-	regeneratePin: async (event) => {
+	setPin: async (event) => {
+		const denied = await requireAdmin(event.locals);
+		if (denied) return denied;
+		const fresh = requireStepUp(event.locals);
+		if (fresh) return fresh;
+		const data = await event.request.formData();
+		const result = await setMemberPin(String(data.get('userId') ?? ''), String(data.get('pin') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		return { pin: result.pin, displayName: result.displayName, loginName: result.loginName, attached: false };
+	},
+	confirmStepUp: async (event) => {
 		const denied = await requireAdmin(event.locals);
 		if (denied) return denied;
 		const data = await event.request.formData();
 		if (!(await verifyAdminStepUp(String(data.get('totp') ?? '')))) {
-			return fail(401, { message: 'Code d’authentification incorrect.' });
+			return fail(401, { message: 'Code de l’appli 2FA incorrect.' });
 		}
-		const result = await regeneratePin(String(data.get('userId') ?? ''));
-		return { pin: result.pin, displayName: result.displayName, loginName: result.loginName, attached: false };
+		if (!event.locals.sessionHash) return fail(401, { message: 'Session introuvable.' });
+		await markStepUp(event.locals.sessionHash);
+		const group = String(data.get('groupId') ?? '');
+		redirect(303, group ? `${getConfig().adminPath}?g=${group}` : getConfig().adminPath);
+	},
+	createList: async (event) => {
+		const denied = await requireAdmin(event.locals);
+		if (denied) return denied;
+		const data = await event.request.formData();
+		const result = await createList({
+			actor: { role: 'admin' },
+			groupId: String(data.get('groupId') ?? ''),
+			title: String(data.get('title') ?? ''),
+			theme: String(data.get('theme') ?? 'generique'),
+			eventDate: String(data.get('eventDate') ?? ''),
+			recipientId: String(data.get('recipientId') ?? '')
+		});
+		if (!result.ok) return fail(400, { message: result.message });
+		redirect(303, `/listes/${result.id}`);
 	},
 	unlockMember: async (event) => {
 		const denied = await requireAdmin(event.locals);

@@ -42,7 +42,7 @@
 			<div class="group-head" style:background={accent.header} style:color={accent.ink}>
 				<div class="stars" aria-hidden="true"></div>
 				<div>
-					<h2>{group.name}</h2>
+					<h2><a href="/groupes/{group.id}">{group.name}</a></h2>
 					<p>{group.memberCount} membre{group.memberCount > 1 ? 's' : ''} · {group.listCount} liste{group.listCount > 1 ? 's' : ''} en cours</p>
 				</div>
 				<div class="avatar-row" aria-label="Membres">
@@ -55,7 +55,7 @@
 				</div>
 			</div>
 			{#if group.lists.length === 0}
-				<p class="empty-inline">Aucune liste pour le moment. Un membre du groupe peut en créer une.</p>
+				<p class="empty-inline">Aucune liste pour l’instant, l’admin en créera une.</p>
 			{/if}
 			{#each group.lists as list}
 				<a class="list-row" href="/listes/{list.id}">

@@ -50,6 +50,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.isAdmin = false;
 	event.locals.adminUsername = null;
 	event.locals.sessionHash = null;
+	event.locals.stepUpUntil = null;
 
 	const token = readSessionCookie(event.cookies);
 	if (token) {
@@ -59,6 +60,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			event.locals.isAdmin = true;
 			event.locals.adminUsername = admin[0]?.username ?? 'Admin';
 			event.locals.sessionHash = row.tokenHash;
+			event.locals.stepUpUntil = row.stepUpUntil;
 		} else if (row?.userId) {
 			const user = await loadActiveUser(row.userId);
 			if (user) {

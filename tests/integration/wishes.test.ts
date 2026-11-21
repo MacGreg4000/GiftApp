@@ -69,8 +69,27 @@ describeDb('listes, souhaits et secret de réservation', () => {
 			{ groupId: group[0]!.id, userId: lea[0]!.id }
 		]);
 
-		const created = await createList({
+		const byAdmin = await createList({
+			actor: { role: 'admin' },
+			groupId: group[0]!.id,
+			title: 'Pour Léa',
+			theme: 'anniversaire',
+			eventDate: '',
+			recipientId: lea[0]!.id
+		});
+		expect(byAdmin.ok).toBe(true);
+		const refused = await createList({
 			actor: { role: 'member', userId: alice[0]!.id },
+			groupId: group[0]!.id,
+			title: 'Interdit',
+			theme: 'noel',
+			eventDate: '',
+			recipientId: ''
+		});
+		expect(refused.ok).toBe(false);
+
+		const created = await createList({
+			actor: { role: 'admin' },
 			groupId: group[0]!.id,
 			title: 'Noël 2026',
 			theme: 'noel',
@@ -161,7 +180,7 @@ describeDb('listes, souhaits et secret de réservation', () => {
 			{ groupId: group[0]!.id, userId: marc[0]!.id }
 		]);
 		const created = await createList({
-			actor: { role: 'member', userId: marc[0]!.id },
+			actor: { role: 'admin' },
 			groupId: group[0]!.id,
 			title: 'Anniversaire d’Alice',
 			theme: 'anniversaire',
@@ -210,7 +229,7 @@ describeDb('listes, souhaits et secret de réservation', () => {
 		const group = await getDb().insert(appGroup).values({ name: 'Famille' }).returning();
 		await getDb().insert(groupMember).values({ groupId: group[0]!.id, userId: alice[0]!.id });
 		const created = await createList({
-			actor: { role: 'member', userId: alice[0]!.id },
+			actor: { role: 'admin' },
 			groupId: group[0]!.id,
 			title: 'Noël',
 			theme: 'noel',
@@ -267,7 +286,7 @@ describeDb('listes, souhaits et secret de réservation', () => {
 			await getDb().insert(groupMember).values({ groupId: group[0]!.id, userId: user.id });
 		}
 		const created = await createList({
-			actor: { role: 'member', userId: alice[0]!.id },
+			actor: { role: 'admin' },
 			groupId: group[0]!.id,
 			title: 'Anniversaire',
 			theme: 'anniversaire',

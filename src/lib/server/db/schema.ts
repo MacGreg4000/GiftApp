@@ -318,7 +318,8 @@ export const session = pgTable(
 		lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
 		expiresAt: ts('expires_at').notNull(),
 		ip: inet('ip'),
-		userAgent: text('user_agent')
+		userAgent: text('user_agent'),
+		stepUpUntil: ts('step_up_until')
 	},
 	(t) => [
 		index('session_expires_idx').on(t.expiresAt),

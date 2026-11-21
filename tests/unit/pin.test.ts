@@ -11,6 +11,14 @@ describe('codes PIN', () => {
 		expect(isTrivialPin('847291')).toBe(false);
 	});
 
+	it('accepte un code choisi et refuse un code trop court', async () => {
+		const { pinProblem } = await import('#lib/pin-code');
+		expect(pinProblem('')).toBeNull();
+		expect(pinProblem('847291')).toBeNull();
+		expect(pinProblem('12345')).toMatch(/6 chiffres/);
+		expect(pinProblem('123456')).toMatch(/trop facile/);
+	});
+
 	it('ne génère pas de code trivial', () => {
 		for (let i = 0; i < 30; i++) expect(isTrivialPin(generatePin())).toBe(false);
 	});

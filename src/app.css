@@ -634,6 +634,9 @@ dialog.sheet::backdrop { background: rgba(58, 42, 34, 0.45); }
 .plain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
 .plain-list li { display: flex; flex-direction: column; gap: 4px; }
 .plain-list a { font-weight: 750; }
+.pin-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.pin-edit label { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; font-weight: 650; }
+.pin-edit input { width: 8.5rem; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
 
 @media (max-width: 980px) {
 	.login-shell { grid-template-columns: 1fr; }

@@ -27,7 +27,7 @@ Vous pouvez aussi fixer `SETUP_TOKEN` dans `.env` avant le premier démarrage. L
 
 Ensuite : phrase de passe (14 caractères minimum, qui ne contient pas le nom du compte), QR code TOTP, dix codes de secours affichés une seule fois. La session admin dure 12 heures et expire après 30 minutes sans activité. Les actions sensibles (régénérer un code, supprimer un groupe) redemandent un code TOTP.
 
-Pour l’essayer en famille : créez un groupe, deux membres, notez les codes à six chiffres. Avec le premier, ouvrez une liste puis un souhait, et cochez « Cadeau commun » avec un montant visé. Avec le second, « Je participe » ou « Compléter le reste ». Le premier ne voit pas la barre. Dans `/gestion`, la colonne des cadeaux communs montre les parts. La page Alertes, ouverte depuis l’icône sur iPhone, active les notifications si les clés VAPID sont dans `.env`.
+Pour l’essayer en famille : créez un groupe, deux membres, notez les codes à six chiffres, puis ouvrez une liste depuis la page du groupe. Avec le premier, ajoutez un souhait et cochez « Cadeau commun » avec un montant visé. Avec le second, « Je participe » ou « Compléter le reste ». Le premier ne voit pas la barre. Dans `/gestion`, la colonne des cadeaux communs montre les parts. La page Alertes, ouverte depuis l’icône sur iPhone, active les notifications si les clés VAPID sont dans `.env`.
 
 ## Variables d’environnement
 
@@ -130,7 +130,7 @@ Le membre choisit son prénom (mémorisé sur l’appareil, pas dans un annuaire
 
 Le propriétaire d’un souhait ne reçoit aucune information de réservation (option A) : pas de « déjà pris », pas de nom. Les autres membres voient seulement « Déjà pris ». La personne qui a réservé peut annuler ou marquer le cadeau comme acheté. L’administrateur voit qui a pris quoi, sur la fiche du groupe et dans Listes. Ces règles sont dans les objets renvoyés à la page et à `GET /listes/<id>/json`, et dans les triggers SQL.
 
-N’importe quel membre du groupe crée une liste (nom, thème Noël, Saint-Nicolas, Anniversaire ou Autre, date facultative, personne concernée facultative). Si une personne est indiquée, elle seule y dépose des souhaits. Sinon chacun ajoute les siens. L’administrateur modifie et archive toutes les listes.
+Seul l’organisateur crée une liste, depuis la page du groupe ou depuis Listes (nom, thème Noël, Saint-Nicolas, Anniversaire ou Autre, date facultative, personne concernée facultative). Si une personne est indiquée, elle seule y dépose des souhaits. Sinon chacun ajoute les siens. L’administrateur modifie et archive toutes les listes.
 
 Un souhait porte un titre, un lien facultatif, une photo facultative, une priorité de 1 à 3, une description et la case « surprenez-moi ». Cette case désigne une idée vague, sans objet précis : le lien reste facultatif et la carte s’affiche comme un cadeau mystère. « Lire le lien » tente un aperçu (titre et image) : http ou https seulement, ports 80 et 443, DNS revérifié à chaque redirection (3 au plus), adresses privées et locales refusées, 5 secondes, 1 Mo, sans cookie. L’image est recopiée sur le volume, jamais affichée depuis le site d’origine. Un double clic sur Enregistrer ne crée pas le souhait deux fois : le bouton se verrouille le temps de l’envoi, et le serveur reconnaît le même formulaire.
 

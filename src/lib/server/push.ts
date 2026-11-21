@@ -160,7 +160,7 @@ export async function dispatch(groupId: string, notice: Notice, extra: { actorId
 	}
 }
 
-export async function noteNewList(input: { groupId: string; listId: string; listTitle: string; actorId: string }) {
+export async function noteNewList(input: { groupId: string; listId: string; listTitle: string; actorId: string | null }) {
 	await dispatch(
 		input.groupId,
 		{ kind: 'new_list', listId: input.listId, listTitle: input.listTitle },

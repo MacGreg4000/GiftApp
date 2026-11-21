@@ -7,6 +7,11 @@ import { newSessionToken } from './crypto';
 export const MEMBER_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 export const ADMIN_TTL_MS = 12 * 60 * 60 * 1000;
 export const ADMIN_IDLE_MS = 30 * 60 * 1000;
+export const STEP_UP_MS = 10 * 60 * 1000;
+
+export function stepUpFresh(until: Date | null | undefined, now = new Date()): boolean {
+	return Boolean(until && until.getTime() > now.getTime());
+}
 
 export function sessionCookieName(secure: boolean): string {
 	return secure ? '__Host-session' : 'ns_session';
@@ -30,9 +35,16 @@ export async function createSession(input: {
 		lastSeenAt: now,
 		expiresAt: new Date(now.getTime() + ttl),
 		ip: input.ip,
-		userAgent: input.userAgent?.slice(0, 300) ?? null
+		userAgent: input.userAgent?.slice(0, 300) ?? null,
+		stepUpUntil: input.isAdmin ? new Date(now.getTime() + STEP_UP_MS) : null
 	});
 	return token;
+}
+
+export async function markStepUp(tokenHash: Buffer, now = new Date()): Promise<Date> {
+	const until = new Date(now.getTime() + STEP_UP_MS);
+	await getDb().update(session).set({ stepUpUntil: until }).where(eq(session.tokenHash, tokenHash));
+	return until;
 }
 
 export async function readSession(token: string, now = new Date()) {

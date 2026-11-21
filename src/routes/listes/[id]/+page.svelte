@@ -87,6 +87,7 @@
 		saving = true;
 		return async ({ result, update }) => {
 			try {
+				if (result.type === 'redirect') box?.close();
 				if (result.type === 'success' && result.data && typeof result.data === 'object' && 'preview' in result.data) {
 					const next = (result.data as { preview?: typeof preview }).preview ?? null;
 					if (next?.title && !title.trim()) title = next.title;
@@ -159,7 +160,13 @@
 		<article class="group-card">
 			<p class="empty-inline">
 				Aucun souhait pour le moment.
-				{#if data.page.canAdd}Le bouton + en bas de l’écran en ajoute un.{/if}
+				{#if data.page.canAdd}
+					<button class="btn" type="button" onclick={openNew}>Ajouter un souhait</button>
+				{:else if data.page.role === 'admin'}
+					Les membres les ajoutent une fois connectés avec leur prénom et leur code.
+				{:else if data.page.recipient}
+					Seul {data.page.recipient.name} peut en ajouter ici.
+				{/if}
 			</p>
 		</article>
 	{/if}

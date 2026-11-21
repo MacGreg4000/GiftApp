@@ -9,6 +9,7 @@ declare global {
 			isAdmin: boolean;
 			adminUsername: string | null;
 			sessionHash: Buffer | null;
+			stepUpUntil: Date | null;
 		}
 		interface Error {
 			message: string;

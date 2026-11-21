@@ -5,6 +5,8 @@
 	import { ACCENT_COLORS, THEME_LABELS } from '#lib/palette';
 	import { formatWhen, lockLabel } from '#lib/format';
 	import { formatEuros } from '#lib/money';
+	import { suggestPin } from '#lib/pin-code';
+	import ListCreateForm from '#lib/components/ListCreateForm.svelte';
 
 	let { data, form } = $props();
 	let copied = $state(false);
@@ -13,6 +15,12 @@
 		if (!form?.pin) return;
 		await navigator.clipboard.writeText(form.pin);
 		copied = true;
+	}
+
+	function fillPin(event: MouseEvent) {
+		const form = (event.currentTarget as HTMLButtonElement).form;
+		const input = form?.elements.namedItem('pin');
+		if (input instanceof HTMLInputElement) input.value = suggestPin();
 	}
 </script>
 
@@ -79,14 +87,23 @@
 			<div class="table-card stack">
 				<p>Chemin d’administration : <code>{data.adminPath}</code></p>
 				<p>Session admin : 12 heures au plus, 30 minutes d’inactivité. Les membres restent connectés 180 jours.</p>
-				<p>Les actions sensibles (nouveau code, suppression d’un groupe) redemandent le code d’authentification.</p>
+				<p>Changer un code ou supprimer un groupe demande une fois le code de l’appli 2FA. Il reste valable 10 minutes.</p>
 				{#if data.usingDevSecrets}
 					<p class="alert">Des secrets de développement sont encore utilisés. Changez-les avant d’ouvrir le site sur Internet.</p>
 				{/if}
 			</div>
 		{:else if data.section === 'listes'}
 			<h1 class="serif">Listes</h1>
-			<p class="sub">N’importe quel membre crée une liste depuis son groupe. Vous pouvez toutes les lire, les modifier et les archiver.</p>
+			<p class="sub">Créez une liste ici, pour un membre ou pour tout le groupe. Les membres y ajoutent ensuite leurs souhaits.</p>
+			{#if data.groups.length > 0}
+				<section class="table-card" style="margin-bottom:16px">
+					<h2>Nouvelle liste</h2>
+					<ListCreateForm groups={data.groups} people={data.people} />
+				</section>
+			{:else}
+				<p class="empty-inline">Créez d’abord un groupe, puis une liste.</p>
+				<p><a class="btn small" href="{data.adminPath}#nouveau-groupe">Nouveau groupe</a></p>
+			{/if}
 			<div class="table-card">
 				<table>
 					<thead>
@@ -111,7 +128,7 @@
 								</td>
 							</tr>
 						{:else}
-							<tr><td colspan="5">Aucune liste. Un membre en crée une depuis la page du groupe.</td></tr>
+							<tr><td colspan="5">Aucune liste. Le formulaire au-dessus en crée une.</td></tr>
 						{/each}
 					</tbody>
 				</table>
@@ -142,6 +159,25 @@
 
 			{#if data.current}
 				<h1 class="serif" style="margin-bottom:8px">{data.current.name}</h1>
+				{#if !data.stepUp}
+					<section class="table-card" style="margin-bottom:16px">
+						<h2>Confirmez avec votre appli 2FA</h2>
+						<p class="quiet">
+							C’est le code à 6 chiffres de Aegis, 1Password ou Google Authenticator — pas le code d’un membre.
+							Une confirmation suffit pour les 10 prochaines minutes (nouveau code, suppression d’un groupe).
+						</p>
+						<form method="post" action="?g={data.current.id}&/confirmStepUp" class="form-grid">
+							<input type="hidden" name="groupId" value={data.current.id} />
+							<label>
+								Code de ton appli 2FA
+								<input name="totp" inputmode="numeric" autocomplete="one-time-code" required pattern={'[0-9]{6}'} placeholder="123456" />
+							</label>
+							<button class="btn" type="submit">Confirmer</button>
+						</form>
+					</section>
+				{:else}
+					<p class="quiet">Appli 2FA confirmée pour quelques minutes. Vous pouvez changer les codes sans la ressaisir.</p>
+				{/if}
 				{#if data.stats}
 					<div class="stats">
 						<span class="stat">{data.stats.members} membres</span>
@@ -150,6 +186,13 @@
 						<span class="stat">{data.stats.taken} déjà pris</span>
 					</div>
 				{/if}
+				<section class="table-card" id="nouvelle-liste" style="margin-bottom:16px">
+					<div class="table-head">
+						<h2>Nouvelle liste</h2>
+						<span class="quiet">Pour un membre, ou pour tout le groupe</span>
+					</div>
+					<ListCreateForm groups={[data.current]} people={data.people} groupId={data.current.id} />
+				</section>
 				<div class="admin-grid">
 					<section class="table-card">
 						<div class="table-head">
@@ -176,15 +219,19 @@
 										</td>
 										<td class="row-actions">
 											{#if lock}
-												<form method="post" action="?/unlockMember">
+												<form method="post" action="?g={data.current.id}&/unlockMember">
 													<input type="hidden" name="userId" value={member.id} />
 													<button class="btn soft small" type="submit">Débloquer</button>
 												</form>
 											{/if}
-											<form method="post" action="?/regeneratePin" class="stack">
+											<form method="post" action="?g={data.current.id}&/setPin" class="pin-edit">
 												<input type="hidden" name="userId" value={member.id} />
-												<input name="totp" inputmode="numeric" placeholder="Code admin" aria-label="Code d’authentification pour régénérer" required />
-												<button class="btn small" type="submit">Régénérer</button>
+												<label>
+													Nouveau code
+													<input name="pin" inputmode="numeric" autocomplete="off" maxlength="6" pattern={'[0-9]{6}'} placeholder="6 chiffres" />
+												</label>
+												<button class="btn soft small" type="button" onclick={fillPin}>Générer</button>
+												<button class="btn small" type="submit">Enregistrer</button>
 											</form>
 										</td>
 									</tr>
@@ -192,7 +239,7 @@
 										<tr>
 											<td colspan="4" class="quiet">
 												Appareil vu {formatWhen(new Date(device.lastSeenAt))} · {device.ip ?? 'IP inconnue'}
-												<form method="post" action="?/revokeSession" style="display:inline">
+												<form method="post" action="?g={data.current.id}&/revokeSession" style="display:inline">
 													<input type="hidden" name="token" value={device.token} />
 													<input type="hidden" name="userId" value={member.id} />
 													<button class="linkish" type="submit">Révoquer</button>
@@ -201,16 +248,21 @@
 										</tr>
 									{/each}
 								{:else}
-									<tr><td colspan="4">Aucun membre pour l’instant.</td></tr>
+									<tr><td colspan="4">Aucun membre. Ajoutez-en un avec le formulaire sous le tableau.</td></tr>
 								{/each}
 							</tbody>
 						</table>
 						<h3>Ajouter un membre</h3>
-						<form method="post" action="?/addMember" class="form-grid" use:enhance>
+						<form method="post" action="?g={data.current.id}&/addMember" class="form-grid" use:enhance>
 							<input type="hidden" name="groupId" value={data.current.id} />
 							<label>Prénom affiché<input name="displayName" required maxlength="60" /></label>
 							<label>Prénom de connexion<input name="loginName" placeholder="laissé vide = automatique" /></label>
 							<label>Rôle dans le groupe<input name="label" maxlength="40" placeholder="Papa, Maman…" /></label>
+							<label>
+								Code à 6 chiffres
+								<input name="pin" inputmode="numeric" autocomplete="off" maxlength="6" pattern={'[0-9]{6}'} placeholder="vide = généré" />
+							</label>
+							<button class="btn soft" type="button" onclick={fillPin}>Générer</button>
 							<button class="btn" type="submit">Ajouter</button>
 						</form>
 					</section>
@@ -257,7 +309,7 @@
 						{/if}
 						<hr />
 						<h3>Groupe</h3>
-						<form method="post" action="?/updateGroup" class="stack">
+						<form method="post" action="?g={data.current.id}&/updateGroup" class="stack">
 							<input type="hidden" name="id" value={data.current.id} />
 							<label>Nom<input name="name" value={data.current.name} required /></label>
 							<label>Description<textarea name="description" rows="2">{data.current.description ?? ''}</textarea></label>
@@ -270,15 +322,15 @@
 							</label>
 							<button class="btn soft" type="submit">Enregistrer</button>
 						</form>
-						<form method="post" action="?/archiveGroup">
+						<form method="post" action="?g={data.current.id}&/archiveGroup">
 							<input type="hidden" name="id" value={data.current.id} />
 							<input type="hidden" name="archived" value={data.current.archivedAt ? '0' : '1'} />
 							<button class="linkish" type="submit">{data.current.archivedAt ? 'Réactiver' : 'Archiver'}</button>
 						</form>
-						<form method="post" action="?/deleteGroup" class="stack">
+						<form method="post" action="?g={data.current.id}&/deleteGroup" class="stack">
 							<input type="hidden" name="id" value={data.current.id} />
 							<label>Supprimer : retapez « {data.current.name} »<input name="confirm" /></label>
-							<label>Code d’authentification<input name="totp" inputmode="numeric" /></label>
+							<p class="quiet">La suppression utilise la confirmation 2FA des 10 dernières minutes.</p>
 							<button class="btn small" type="submit">Supprimer le groupe</button>
 						</form>
 					</section>
