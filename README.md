@@ -2,7 +2,7 @@
 
 Listes de cadeaux familiales, en français, à héberger soi-même. L’application tourne dans Docker sur un NAS, derrière le reverse proxy déjà en place (pas de VPN). Les membres se connectent avec leur prénom et un code à six chiffres. L’organisateur a un compte séparé, protégé par une phrase de passe et un code TOTP.
 
-Cette version couvre l’usage quotidien : installation, groupes, codes PIN, listes, souhaits, photos, aperçu de lien et réservations. Le propriétaire d’un souhait ne voit pas s’il est pris. Les cadeaux communs et les notifications viendront ensuite.
+Cette version couvre l’usage familial : installation, groupes, codes PIN, listes, souhaits, photos, aperçu de lien, réservations, cadeaux communs et notifications. Le propriétaire d’un souhait ne voit pas s’il est pris, ni qui participe à une cagnotte.
 
 Le dossier de conception visait SvelteKit 2. L’outil officiel `sv` installe aujourd’hui SvelteKit 3 (Svelte 5, Vite 8, adaptateur Node). L’architecture reste celle du dossier : un seul conteneur applicatif, Drizzle, PostgreSQL 17.
 
@@ -27,6 +27,8 @@ Vous pouvez aussi fixer `SETUP_TOKEN` dans `.env` avant le premier démarrage. L
 
 Ensuite : phrase de passe (14 caractères minimum, qui ne contient pas le nom du compte), QR code TOTP, dix codes de secours affichés une seule fois. La session admin dure 12 heures et expire après 30 minutes sans activité. Les actions sensibles (régénérer un code, supprimer un groupe) redemandent un code TOTP.
 
+Pour l’essayer en famille : créez un groupe, deux membres, notez les codes à six chiffres. Avec le premier, ouvrez une liste puis un souhait, et cochez « Cadeau commun » avec un montant visé. Avec le second, « Je participe » ou « Compléter le reste ». Le premier ne voit pas la barre. Dans `/gestion`, la colonne des cadeaux communs montre les parts. La page Alertes, ouverte depuis l’icône sur iPhone, active les notifications si les clés VAPID sont dans `.env`.
+
 ## Variables d’environnement
 
 | Variable | Rôle |
@@ -40,6 +42,8 @@ Ensuite : phrase de passe (14 caractères minimum, qui ne contient pas le nom du
 | `XFF_DEPTH` | Nombre de proxies de confiance, en partant de la droite de `X-Forwarded-For`. `1` pour un seul reverse proxy. |
 | `ADDRESS_HEADER` | En-tête lu par l’application (défaut `x-forwarded-for`). |
 | `PROTOCOL_HEADER` / `HOST_HEADER` | Repris par l’adaptateur si `ORIGIN` n’est pas défini. Avec `ORIGIN`, ils ne changent pas l’adresse vue par l’application. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Paire de clés des notifications. Vides : le site fonctionne, le bouton d’alerte explique que le serveur n’est pas prêt. |
+| `VAPID_SUBJECT` | Contact `mailto:` exigé par le protocole, par exemple `mailto:vous@exemple.be`. |
 
 Si `ORIGIN` commence par `https://` et que `PIN_PEPPER`, `TOTP_KEY` ou le mot de passe de la base sont encore les valeurs de développement, le conteneur refuse de démarrer.
 
@@ -99,7 +103,7 @@ Traefik ajoute `X-Forwarded-For` et `X-Forwarded-Proto`. Avec un seul saut, lais
 4. Les images `postgres:17-alpine` et `prodrigestivill/postgres-backup-local:17` sont multi-architectures. L’image de l’application se construit sur le NAS (`docker compose build`) : le Dockerfile part de `node:24-alpine`, donc amd64 et arm64.
 5. Le workflow `.github/workflows/image.yml` construit et pousse `linux/amd64` + `linux/arm64` vers GHCR lors d’un tag `v*`. Si le dépôt n’est pas sur GitHub, construisez sur le NAS ou avec `docker buildx build --platform linux/amd64,linux/arm64`.
 
-Mémoire prévue : 384 Mo pour l’application, 512 Mo pour Postgres, 128 Mo pour la sauvegarde. Postgres est réglé pour un petit NAS (`shared_buffers=128MB`, `max_connections=20`).
+Mémoire prévue : 512 Mo pour l’application, 512 Mo pour Postgres, 128 Mo pour la sauvegarde. Postgres est réglé pour un petit NAS (`shared_buffers=128MB`, `max_connections=20`).
 
 ## Sauvegardes et restauration
 
@@ -107,15 +111,15 @@ Le conteneur `backup` lance `pg_dump` au démarrage puis chaque nuit à 3 h (fus
 
 Ne copiez pas `data/postgres` à chaud. Copiez `backups/` et, plus tard, `data/uploads`.
 
-Restaurer un dump dans une base vide (le conteneur `db` doit tourner) :
+Restaurer un dump (la base est recréée vide, puis rechargée) :
 
 ```bash
-docker compose stop app
-gunzip -c backups/daily/wishlist-latest.sql.gz | docker compose exec -T db psql -U wishlist -d wishlist
-docker compose start app
+./scripts/restaurer.sh backups/daily/wishlist-latest.sql.gz
 ```
 
-Les copies sont rangées dans `backups/daily`, `backups/weekly`, `backups/monthly` et `backups/last` (fichiers `wishlist-….sql.gz`). Après une restauration, les sessions et les codes PIN sont ceux du dump.
+Sans Docker, le même script lit `DATABASE_URL`. Les copies sont dans `backups/daily`, `backups/weekly`, `backups/monthly` et `backups/last`. Après une restauration, les sessions et les codes PIN sont ceux du dump. Les photos, elles, restent dans `data/uploads` : gardez ce dossier en même temps que `backups/`.
+
+Le script a été vérifié sur un dump réel : une table écrite avant `pg_dump`, base supprimée, restauration, la ligne est revenue. L’écran Sauvegardes signale un dump de plus de 36 heures ; ce calcul est couvert par un test.
 
 ## Connexion des membres
 
@@ -130,6 +134,31 @@ N’importe quel membre du groupe crée une liste (nom, thème Noël, Saint-Nico
 Un souhait porte un titre, un lien facultatif, une photo facultative, une priorité de 1 à 3, une description et la case « surprenez-moi ». Cette case désigne une idée vague, sans objet précis : le lien reste facultatif et la carte s’affiche comme un cadeau mystère. « Lire le lien » tente un aperçu (titre et image) : http ou https seulement, ports 80 et 443, DNS revérifié à chaque redirection (3 au plus), adresses privées et locales refusées, 5 secondes, 1 Mo, sans cookie. L’image est recopiée sur le volume, jamais affichée depuis le site d’origine. Un double clic sur Enregistrer ne crée pas le souhait deux fois : le bouton se verrouille le temps de l’envoi, et le serveur reconnaît le même formulaire.
 
 Les photos déposées (10 Mo, JPEG, PNG, WebP, HEIC) sont réencodées en WebP (1 200 px et miniature), sans données EXIF, dans `data/uploads`. Elles ne sont servies qu’aux membres du groupe.
+
+### Cadeau commun
+
+La case « Cadeau commun » sur un souhait ouvre une cagnotte. Le montant visé est facultatif. Les autres membres promettent un montant en euros ou une part (1/2, 1/3, 1/4…). Une barre montre l’avancement. Le nombre de participants n’apparaît qu’à partir de deux. « Je m’en occupe » désigne l’organisateur, qui peut « Compléter le reste », marquer « C’est financé » puis « C’est acheté ». Lui et l’admin voient qui a promis quoi. Les autres voient le total et leur propre part, pas le détail. Le propriétaire du souhait ne voit ni la barre, ni les noms, ni les montants promis : seulement qu’il s’agit d’un cadeau commun et le montant visé qu’il a lui-même indiqué.
+
+### Alertes
+
+L’application est installable (manifeste, icônes, service worker). La page Alertes explique, en français, comment ajouter Nos Souhaits à l’écran d’accueil d’un iPhone (iOS 16.4 ou plus récent) avant d’autoriser les notifications : Safari ne les délivre pas tant que l’icône n’est pas utilisée. L’activation demande un toucher, jamais au chargement de la page.
+
+Quatre événements : nouvelle liste, nouveau souhait (désactivé par défaut), cadeau commun financé, rappel sept jours avant la date puis la veille. Les textes ne contiennent ni nom d’acheteur, ni montant d’une part. Le propriétaire d’un souhait ne reçoit rien sur une réservation ni sur le financement de sa cagnotte. Sans clés VAPID dans `.env`, le reste du site fonctionne et la page le dit clairement.
+
+Générer les clés : `npx web-push generate-vapid-keys`.
+
+## Sécurité
+
+Ce qui est en place, et ce qui a été revu avec cette version :
+
+- Compte admin créé une seule fois, avec un code d’installation à usage unique, une phrase de passe et un TOTP. Les actions sensibles redemandent un code.
+- Codes membres : HMAC puis argon2id, message identique si le prénom ou le code est faux, verrouillage progressif du compte et de l’adresse.
+- Cookies de session `httpOnly`, `Secure` et préfixe `__Host-` dès que `ORIGIN` est en https. En-têtes `nosniff`, `DENY` pour les cadres, HSTS, politique de permissions.
+- Aperçus de liens : http(s), ports 80 et 443, DNS revérifié, adresses privées refusées. Les inscriptions push subissent le même refus avant tout envoi, pour qu’un membre ne fasse pas interroger le réseau local par le serveur.
+- Le secret d’achat est dans les requêtes renvoyées au navigateur et dans des triggers SQL (pas de réservation de son propre souhait, pas de réservation d’un cadeau commun, pas de participation du propriétaire, pas de part après l’achat).
+- Les notifications sont des phrases fixes. Elles ne reçoivent pas la liste des participants.
+
+Reste hors de l’application, à décider sur le NAS : limiter l’admin à l’adresse de la maison, et un fail2ban ou CrowdSec devant le proxy.
 
 ## Développement
 
@@ -152,9 +181,6 @@ npm test
 
 `LOGIN_DELAY_SCALE=0` est posé par les tests pour ne pas attendre le délai anti-bruteforce.
 
-## Ce qui n’est pas dans cette version
+## Ce qui reste hors de l’application
 
-- Cadeaux communs (cagnottes) et notifications Web Push.
-- Prix, sauf les montants de cagnotte prévus plus tard.
-
-Questions encore ouvertes : modèle exact du NAS, nom de domaine et proxy retenus, restriction de l’admin à l’adresse de la maison, fail2ban ou CrowdSec devant le proxy.
+Pas de prix sur les souhaits ordinaires. Le seul montant est celui, facultatif, d’un cadeau commun. La restriction de l’admin à la maison et un outil de type fail2ban se règlent sur le proxy, pas dans ce conteneur.

@@ -5,11 +5,9 @@
 	let { data, form } = $props();
 	let ios = $state(false);
 	let standalone = $state(false);
-	let endpoint = $state('');
-	let p256dh = $state('');
-	let auth = $state('');
 	let localError = $state('');
 	let subscribeForm = $state<HTMLFormElement | null>(null);
+	let unsubscribeForm = $state<HTMLFormElement | null>(null);
 
 	$effect(() => {
 		const ua = navigator.userAgent;
@@ -52,19 +50,25 @@
 			applicationServerKey: keyBytes(data.publicKey)
 		});
 		const json = subscription.toJSON();
-		endpoint = subscription.endpoint;
-		p256dh = json.keys?.p256dh ?? '';
-		auth = json.keys?.auth ?? '';
-		subscribeForm?.requestSubmit();
+		const form = subscribeForm;
+		if (!form) return;
+		const fields = form.elements;
+		(fields.namedItem('endpoint') as HTMLInputElement).value = subscription.endpoint;
+		(fields.namedItem('p256dh') as HTMLInputElement).value = json.keys?.p256dh ?? '';
+		(fields.namedItem('auth') as HTMLInputElement).value = json.keys?.auth ?? '';
+		form.requestSubmit();
 	}
 
 	async function disable() {
 		const registration = await navigator.serviceWorker?.getRegistration();
 		const subscription = await registration?.pushManager.getSubscription();
+		const form = unsubscribeForm;
+		if (!form) return;
 		if (subscription) {
-			endpoint = subscription.endpoint;
+			(form.elements.namedItem('endpoint') as HTMLInputElement).value = subscription.endpoint;
 			await subscription.unsubscribe();
 		}
+		form.requestSubmit();
 	}
 </script>
 
@@ -100,13 +104,13 @@
 		{:else}
 			<button class="btn" type="button" onclick={enable} disabled={ios && !standalone}>Activer sur cet appareil</button>
 			<form method="post" action="?/subscribe" bind:this={subscribeForm} use:enhance class="hidden-form">
-				<input type="hidden" name="endpoint" value={endpoint} />
-				<input type="hidden" name="p256dh" value={p256dh} />
-				<input type="hidden" name="auth" value={auth} />
+				<input type="hidden" name="endpoint" value="" />
+				<input type="hidden" name="p256dh" value="" />
+				<input type="hidden" name="auth" value="" />
 			</form>
-			<form method="post" action="?/unsubscribe" use:enhance>
-				<input type="hidden" name="endpoint" value={endpoint} />
-				<button class="btn ghost" type="submit" onclick={disable}>Couper sur cet appareil</button>
+			<form method="post" action="?/unsubscribe" bind:this={unsubscribeForm} use:enhance>
+				<input type="hidden" name="endpoint" value="" />
+				<button class="btn ghost" type="button" onclick={disable}>Couper sur cet appareil</button>
 			</form>
 		{/if}
 	</section>
