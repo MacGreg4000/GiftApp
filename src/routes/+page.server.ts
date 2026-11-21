@@ -29,6 +29,13 @@ export const actions: Actions = {
 		const prenom = String(data.get('prenom') ?? '');
 		const joined = [0, 1, 2, 3, 4, 5].map((index) => String(data.get('c' + index) ?? '')).join('');
 		const code = String(data.get('code') ?? '') || joined;
+		// Diagnostic : longueur seulement, jamais les chiffres.
+		console.info('[login]', {
+			prenomLen: prenom.length,
+			codeLen: code.replace(/\D/g, '').length,
+			rawLen: code.length,
+			cases: [0, 1, 2, 3, 4, 5].map((i) => String(data.get('c' + i) ?? '').length).join('')
+		});
 		const result = await loginWithPin({
 			loginName: prenom,
 			pin: code,
