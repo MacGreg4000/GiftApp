@@ -200,4 +200,51 @@ describeDb('listes, souhaits et secret de réservation', () => {
 		const marcPage = await loadListPage(created.id, { role: 'member', userId: marc[0]!.id });
 		expect(marcPage?.canAdd).toBe(false);
 	});
+
+	it('ignore un second envoi du même formulaire', async () => {
+		const alice = await getDb()
+			.insert(appUser)
+			.values({ displayName: 'Alice', loginName: 'alice-double', pinHash: 'x' })
+			.returning();
+		const group = await getDb().insert(appGroup).values({ name: 'Famille' }).returning();
+		await getDb().insert(groupMember).values({ groupId: group[0]!.id, userId: alice[0]!.id });
+		const created = await createList({
+			actor: { role: 'member', userId: alice[0]!.id },
+			groupId: group[0]!.id,
+			title: 'Noël',
+			theme: 'noel',
+			eventDate: '',
+			recipientId: ''
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		const key = '11111111-1111-4111-8111-111111111111';
+		const first = await createWish({
+			userId: alice[0]!.id,
+			listId: created.id,
+			title: 'Écharpe rouge',
+			url: '',
+			description: 'Douce',
+			priority: 2,
+			isSurprise: false,
+			idempotencyKey: key
+		});
+		const second = await createWish({
+			userId: alice[0]!.id,
+			listId: created.id,
+			title: 'Autre titre',
+			url: 'https://exemple.be/autre',
+			description: 'Ne doit pas être créé',
+			priority: 1,
+			isSurprise: false,
+			idempotencyKey: key
+		});
+		expect(first.ok).toBe(true);
+		expect(second.ok).toBe(true);
+		if (!first.ok || !second.ok) return;
+		expect(second.id).toBe(first.id);
+		const page = await loadListPage(created.id, { role: 'member', userId: alice[0]!.id });
+		expect(page?.wishes).toHaveLength(1);
+		expect(page?.wishes[0]?.title).toBe('Écharpe rouge');
+	});
 });

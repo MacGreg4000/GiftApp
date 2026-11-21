@@ -2,7 +2,7 @@
 
 Listes de cadeaux familiales, en français, à héberger soi-même. L’application tourne dans Docker sur un NAS, derrière le reverse proxy déjà en place (pas de VPN). Les membres se connectent avec leur prénom et un code à six chiffres. L’organisateur a un compte séparé, protégé par une phrase de passe et un code TOTP.
 
-Cette version couvre les phases 0 et 1 : squelette, PostgreSQL, sauvegardes, schéma complet, installation du compte admin, groupes et membres, codes PIN, sessions, limitation des tentatives, journal d’audit et en-têtes de sécurité. Les listes, les réservations, les cadeaux communs, les thèmes illustrés et les notifications viendront ensuite. Les tables et les règles de secret d’achat sont déjà en place.
+Cette version couvre l’usage quotidien : installation, groupes, codes PIN, listes, souhaits, photos, aperçu de lien et réservations. Le propriétaire d’un souhait ne voit pas s’il est pris. Les cadeaux communs et les notifications viendront ensuite.
 
 Le dossier de conception visait SvelteKit 2. L’outil officiel `sv` installe aujourd’hui SvelteKit 3 (Svelte 5, Vite 8, adaptateur Node). L’architecture reste celle du dossier : un seul conteneur applicatif, Drizzle, PostgreSQL 17.
 
@@ -127,7 +127,7 @@ Le propriétaire d’un souhait ne reçoit aucune information de réservation (o
 
 N’importe quel membre du groupe crée une liste (nom, thème Noël, Saint-Nicolas, Anniversaire ou Autre, date facultative, personne concernée facultative). Si une personne est indiquée, elle seule y dépose des souhaits. Sinon chacun ajoute les siens. L’administrateur modifie et archive toutes les listes.
 
-Un souhait porte un titre, un lien facultatif, une photo facultative, une priorité de 1 à 3, une description et la case « surprenez-moi ». Cette case désigne une idée vague, sans objet précis : le lien reste facultatif et la carte s’affiche comme un cadeau mystère. « Lire le lien » tente un aperçu (titre et image) : http ou https seulement, ports 80 et 443, DNS revérifié à chaque redirection (3 au plus), adresses privées et locales refusées, 5 secondes, 1 Mo, sans cookie. L’image est recopiée sur le volume, jamais affichée depuis le site d’origine.
+Un souhait porte un titre, un lien facultatif, une photo facultative, une priorité de 1 à 3, une description et la case « surprenez-moi ». Cette case désigne une idée vague, sans objet précis : le lien reste facultatif et la carte s’affiche comme un cadeau mystère. « Lire le lien » tente un aperçu (titre et image) : http ou https seulement, ports 80 et 443, DNS revérifié à chaque redirection (3 au plus), adresses privées et locales refusées, 5 secondes, 1 Mo, sans cookie. L’image est recopiée sur le volume, jamais affichée depuis le site d’origine. Un double clic sur Enregistrer ne crée pas le souhait deux fois : le bouton se verrouille le temps de l’envoi, et le serveur reconnaît le même formulaire.
 
 Les photos déposées (10 Mo, JPEG, PNG, WebP, HEIC) sont réencodées en WebP (1 200 px et miniature), sans données EXIF, dans `data/uploads`. Elles ne sont servies qu’aux membres du groupe.
 

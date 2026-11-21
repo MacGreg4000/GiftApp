@@ -45,6 +45,8 @@
 	let priority = $state(2);
 	let surprise = $state(false);
 	let preview = $state<{ title: string | null; siteName: string | null; photoId: string | null } | null>(null);
+	let saving = $state(false);
+	let requestKey = $state('');
 
 	function openNew() {
 		editing = null;
@@ -54,6 +56,8 @@
 		priority = 2;
 		surprise = false;
 		preview = null;
+		saving = false;
+		requestKey = crypto.randomUUID();
 		box?.showModal();
 	}
 
@@ -68,14 +72,23 @@
 		box?.showModal();
 	}
 
-	const onWishForm: SubmitFunction = () => {
+	const onWishForm: SubmitFunction = ({ cancel }) => {
+		if (saving) {
+			cancel();
+			return;
+		}
+		saving = true;
 		return async ({ result, update }) => {
-			if (result.type === 'success' && result.data && typeof result.data === 'object' && 'preview' in result.data) {
-				const next = (result.data as { preview?: typeof preview }).preview ?? null;
-				if (next?.title && !title.trim()) title = next.title;
-				preview = next;
+			try {
+				if (result.type === 'success' && result.data && typeof result.data === 'object' && 'preview' in result.data) {
+					const next = (result.data as { preview?: typeof preview }).preview ?? null;
+					if (next?.title && !title.trim()) title = next.title;
+					preview = next;
+				}
+				await update({ reset: false });
+			} finally {
+				saving = false;
 			}
-			await update({ reset: false });
 		};
 	};
 </script>
@@ -282,6 +295,7 @@
 			<button class="close-x" type="button" onclick={() => box?.close()} aria-label="Fermer">×</button>
 		</div>
 		{#if editing}<input type="hidden" name="wishId" value={editing.id} />{/if}
+		{#if !editing}<input type="hidden" name="idempotencyKey" value={requestKey} />{/if}
 		<input type="hidden" name="previewPhotoId" value={preview?.photoId ?? ''} />
 		<input type="hidden" name="previewTitle" value={preview?.title ?? ''} />
 		<input type="hidden" name="previewSite" value={preview?.siteName ?? ''} />
@@ -289,7 +303,7 @@
 		<label>Lien <span class="quiet">facultatif, n’importe quel site</span>
 			<input name="url" bind:value={link} type="url" maxlength="2048" placeholder="https://" />
 		</label>
-		<button class="btn soft small" type="submit" formaction="?/apercu" formnovalidate>Lire le lien</button>
+		<button class="btn soft small" type="submit" formaction="?/apercu" formnovalidate disabled={saving}>Lire le lien</button>
 		{#if form?.message}<p class="alert">{form.message}</p>{/if}
 		{#if preview?.siteName}<p class="quiet">Aperçu : {preview.siteName}</p>{/if}
 		<label>Photo <span class="quiet">JPEG, PNG, WebP ou HEIC, 10 Mo</span>
@@ -310,6 +324,8 @@
 			Surprenez-moi — une idée vague, sans objet précis
 		</label>
 		{#if surprise}<p class="quiet">Le lien reste facultatif. La carte s’affiche comme un cadeau mystère.</p>{/if}
-		<button class="btn" type="submit" formaction={editing ? '?/updateWish' : '?/createWish'}>Enregistrer</button>
+		<button class="btn" type="submit" formaction={editing ? '?/updateWish' : '?/createWish'} disabled={saving}>
+			{saving ? 'Enregistrement…' : 'Enregistrer'}
+		</button>
 	</form>
 </dialog>

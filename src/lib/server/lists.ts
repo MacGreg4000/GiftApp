@@ -317,6 +317,21 @@ async function saveUpload(userId: string, file: Buffer | null | undefined): Prom
 	}
 }
 
+function cleanIdempotencyKey(value: string | null | undefined): string | null {
+	const key = (value ?? '').trim().toLowerCase();
+	if (!key) return null;
+	return UUID_RE.test(key) ? key : null;
+}
+
+async function wishIdForKey(userId: string, key: string): Promise<string | null> {
+	const rows = await getDb()
+		.select({ id: wish.id })
+		.from(wish)
+		.where(and(eq(wish.idempotencyKey, key), eq(wish.ownerId, userId), isNull(wish.deletedAt)))
+		.limit(1);
+	return rows[0]?.id ?? null;
+}
+
 export async function createWish(input: {
 	userId: string;
 	listId: string;
@@ -327,6 +342,7 @@ export async function createWish(input: {
 	isSurprise: boolean;
 	photo?: Buffer | null;
 	preview?: { title?: string | null; siteName?: string | null; photoId?: string | null } | null;
+	idempotencyKey?: string | null;
 }): Promise<Result<{ id: string }>> {
 	const list = await listRow(input.listId);
 	if (!list || list.archivedAt || list.groupArchived) return { ok: false, message: 'Cette liste n’accepte plus de souhait.' };
@@ -336,6 +352,11 @@ export async function createWish(input: {
 	}
 	const fields = wishFields(input);
 	if ('message' in fields) return { ok: false, message: fields.message };
+	const idempotencyKey = cleanIdempotencyKey(input.idempotencyKey);
+	if (idempotencyKey) {
+		const already = await wishIdForKey(input.userId, idempotencyKey);
+		if (already) return { ok: true, id: already };
+	}
 	let photoId: string | null = null;
 	try {
 		photoId = await saveUpload(input.userId, input.photo);
@@ -360,7 +381,8 @@ export async function createWish(input: {
 				isSurprise: fields.isSurprise,
 				photoId,
 				linkPreview,
-				position: Number(position[0]?.next ?? 0)
+				position: Number(position[0]?.next ?? 0),
+				idempotencyKey
 			})
 			.returning({ id: wish.id });
 		const id = rows[0]!.id;
@@ -368,6 +390,11 @@ export async function createWish(input: {
 		return { ok: true, id };
 	} catch (error) {
 		const text = dbText(error);
+		if (idempotencyKey && /wish_idempotency_key_uq/.test(text)) {
+			const already = await wishIdForKey(input.userId, idempotencyKey);
+			if (already) return { ok: true, id: already };
+			return { ok: false, message: 'Ce souhait a déjà été envoyé. Rouvrez le formulaire.' };
+		}
 		if (/wish_owner_must_be_recipient/.test(text)) {
 			return { ok: false, message: 'Cette liste rassemble les souhaits d’une seule personne.' };
 		}

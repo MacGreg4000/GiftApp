@@ -97,7 +97,8 @@ export const actions: Actions = {
 			listId: event.params.id,
 			...wishInput(data),
 			photo,
-			preview: previewInput(data)
+			preview: previewInput(data),
+			idempotencyKey: String(data.get('idempotencyKey') ?? '')
 		});
 		if (!result.ok) return fail(400, { message: result.message });
 		redirect(303, `/listes/${event.params.id}`);

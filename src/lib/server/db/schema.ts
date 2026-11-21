@@ -219,12 +219,16 @@ export const wish = pgTable(
 		purchasedAt: ts('purchased_at'),
 		createdAt: ts('created_at').notNull().defaultNow(),
 		updatedAt: ts('updated_at').notNull().defaultNow(),
-		deletedAt: ts('deleted_at')
+		deletedAt: ts('deleted_at'),
+		idempotencyKey: text('idempotency_key')
 	},
 	(t) => [
 		index('wish_list_owner_idx')
 			.on(t.listId, t.ownerId, t.position)
 			.where(sql`${t.deletedAt} IS NULL`),
+		uniqueIndex('wish_idempotency_key_uq')
+			.on(t.idempotencyKey)
+			.where(sql`${t.idempotencyKey} IS NOT NULL`),
 		check('wish_title_len', sql`char_length(${t.title}) BETWEEN 1 AND 200`),
 		check(
 			'wish_url_http',
