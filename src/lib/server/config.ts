@@ -14,6 +14,9 @@ export type AppConfig = {
 	xffDepth: number;
 	addressHeader: string;
 	usingDevSecrets: boolean;
+	vapidPublicKey: string;
+	vapidPrivateKey: string;
+	vapidSubject: string;
 };
 
 function normalizeAdminPath(value: string | undefined): string {
@@ -46,8 +49,20 @@ export function getConfig(): AppConfig {
 		setupTokenFile: process.env.SETUP_TOKEN_FILE ?? './data/uploads/setup-token',
 		xffDepth: Math.max(1, Number(process.env.XFF_DEPTH ?? '1') || 1),
 		addressHeader: (process.env.ADDRESS_HEADER ?? 'x-forwarded-for').toLowerCase(),
-		usingDevSecrets
+		usingDevSecrets,
+		vapidPublicKey: (process.env.VAPID_PUBLIC_KEY ?? '').trim(),
+		vapidPrivateKey: (process.env.VAPID_PRIVATE_KEY ?? '').trim(),
+		vapidSubject: (process.env.VAPID_SUBJECT ?? 'mailto:admin@localhost').trim()
 	};
+}
+
+export function pushPublicKey(): string {
+	return pushConfigured() ? getConfig().vapidPublicKey : '';
+}
+
+export function pushConfigured(): boolean {
+	const config = getConfig();
+	return config.vapidPublicKey.length > 20 && config.vapidPrivateKey.length > 20;
 }
 
 export function assertProductionSecrets(config = getConfig()): void {

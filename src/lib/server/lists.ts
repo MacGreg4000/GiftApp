@@ -155,6 +155,12 @@ export async function createList(input: {
 		targetId: id,
 		details: { userId: input.actor.userId, theme: input.theme }
 	});
+	try {
+		const { noteNewList } = await import('./push');
+		await noteNewList({ groupId: group.id, listId: id, listTitle: title, actorId: input.actor.userId });
+	} catch (error) {
+		console.error(error);
+	}
 	return { ok: true, id };
 }
 
@@ -402,6 +408,18 @@ export async function createWish(input: {
 			.returning({ id: wish.id });
 		const id = rows[0]!.id;
 		await audit({ actor: 'membre', action: 'wish.create', targetId: id, details: { userId: input.userId } });
+		try {
+			const { noteNewWish } = await import('./push');
+			await noteNewWish({
+				groupId: list.groupId,
+				listId: list.id,
+				wishId: id,
+				listTitle: list.title,
+				ownerId: input.userId
+			});
+		} catch (error) {
+			console.error(error);
+		}
 		return { ok: true, id };
 	} catch (error) {
 		const text = dbText(error);

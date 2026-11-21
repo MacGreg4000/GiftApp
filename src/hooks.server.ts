@@ -22,6 +22,9 @@ export const init: ServerInit = async () => {
 		import('#lib/server/photos')
 			.then((photos) => photos.cleanupOrphanPhotos())
 			.catch((error) => console.error(error));
+		import('#lib/server/push')
+			.then((push) => push.dispatchReminders())
+			.catch((error) => console.error(error));
 	}, 60 * 60 * 1000);
 	timer.unref?.();
 	console.log('Nos Souhaits est prêt.');
@@ -35,6 +38,8 @@ function go(https: boolean, location: string): Response {
 
 function isOpenPath(pathname: string): boolean {
 	if (pathname === '/healthz' || pathname === '/robots.txt' || pathname === '/favicon.svg') return true;
+	if (pathname === '/manifest.webmanifest' || pathname === '/sw.js') return true;
+	if (pathname === '/icon-192.png' || pathname === '/icon-512.png' || pathname === '/apple-touch-icon.png') return true;
 	if (pathname.startsWith('/_app/') || pathname.startsWith('/fonts/')) return true;
 	return false;
 }

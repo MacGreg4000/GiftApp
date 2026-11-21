@@ -45,7 +45,8 @@ export function formatEventDate(iso: string | null): string {
 	}).format(date);
 }
 
-export function daysUntil(iso: string | null, now = new Date()): string | null {
+/** Écart en jours civils, fuseau de Bruxelles. Négatif si la date est passée. */
+export function eventOffsetDays(iso: string | null, now = new Date()): number | null {
 	if (!iso) return null;
 	const [year, month, day] = iso.split('-').map(Number);
 	if (!year || !month || !day) return null;
@@ -58,7 +59,12 @@ export function daysUntil(iso: string | null, now = new Date()): string | null {
 	}).format(now);
 	const [ty, tm, td] = todayParts.split('-').map(Number);
 	const today = Date.UTC(ty!, tm! - 1, td!);
-	const diff = Math.round((target - today) / 86400000);
+	return Math.round((target - today) / 86400000);
+}
+
+export function daysUntil(iso: string | null, now = new Date()): string | null {
+	const diff = eventOffsetDays(iso, now);
+	if (diff === null) return null;
 	if (diff > 1) return `dans ${diff} jours`;
 	if (diff === 1) return 'demain';
 	if (diff === 0) return 'aujourd’hui';

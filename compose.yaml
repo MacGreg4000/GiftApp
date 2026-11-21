@@ -26,6 +26,9 @@ services:
       XFF_DEPTH: ${XFF_DEPTH:-1}
       PROTOCOL_HEADER: ${PROTOCOL_HEADER:-X-Forwarded-Proto}
       HOST_HEADER: ${HOST_HEADER:-X-Forwarded-Host}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost}
       TZ: Europe/Brussels
       BODY_SIZE_LIMIT: 12M
     volumes:

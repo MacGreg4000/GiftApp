@@ -37,6 +37,7 @@
 		{:else}
 			<a href="/accueil" aria-current={active === 'groupes' ? 'page' : undefined}>Mes groupes</a>
 			<a href="/souhaits" aria-current={active === 'souhaits' ? 'page' : undefined}>Mes souhaits</a>
+			<a href="/notifications" aria-current={active === 'alertes' ? 'page' : undefined}>Alertes</a>
 		{/if}
 	</nav>
 	<div class="who">

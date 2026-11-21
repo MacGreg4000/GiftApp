@@ -5,7 +5,7 @@ const SECURITY_HEADERS: Record<string, string> = {
 	'X-Content-Type-Options': 'nosniff',
 	'Referrer-Policy': 'same-origin',
 	'X-Frame-Options': 'DENY',
-	'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+	'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), notifications=(self)',
 	'Cross-Origin-Opener-Policy': 'same-origin',
 	'Cross-Origin-Resource-Policy': 'same-origin'
 };
