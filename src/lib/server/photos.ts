@@ -45,7 +45,8 @@ export async function encodeImage(buffer: Buffer): Promise<{ full: Buffer; thumb
 			.webp({ quality: 72 })
 			.toBuffer();
 		return { full: full.data, thumb, width: full.info.width, height: full.info.height };
-	} catch {
+	} catch (error) {
+		console.error('[photo] décodage impossible', error);
 		throw new PhotoError('Cette photo ne peut pas être lue. Essayez JPEG, PNG ou WebP.');
 	}
 }

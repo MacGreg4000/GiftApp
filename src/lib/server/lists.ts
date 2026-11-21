@@ -330,6 +330,7 @@ async function saveUpload(userId: string, file: Buffer | null | undefined): Prom
 		return stored.id;
 	} catch (error) {
 		if (error instanceof PhotoError) throw error;
+		console.error('[photo] échec enregistrement', error);
 		throw new PhotoError('La photo n’a pas pu être enregistrée.');
 	}
 }
