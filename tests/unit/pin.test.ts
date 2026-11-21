@@ -28,6 +28,14 @@ describe('codes PIN', () => {
 		const taken = new Set(['marie']);
 		expect(suggestLoginName('Marie Dupont', taken)).toBe('marie.d');
 		expect(suggestLoginName('Lucie', new Set())).toBe('lucie');
+		expect(suggestLoginName('Jean-Luc', new Set())).toBe('jeanluc');
+	});
+
+	it('retrouve un prénom affiché avec tiret, espace ou apostrophe', async () => {
+		const { loginCandidates } = await import('#lib/server/auth/pin');
+		expect(loginCandidates('Jean-Luc')).toEqual(['jean-luc', 'jeanluc']);
+		expect(loginCandidates('Jean Luc')).toContain('jeanluc');
+		expect(loginCandidates("N'Golo")).toContain('ngolo');
 	});
 });
 

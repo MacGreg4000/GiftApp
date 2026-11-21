@@ -7,6 +7,7 @@ import {
 	deleteGroup,
 	groupStats,
 	removeMember,
+	revealMemberPin,
 	setMemberPin,
 	contributionsForGroup,
 	reservationsForGroup,
@@ -211,11 +212,13 @@ export const actions: Actions = {
 			displayName: String(data.get('displayName') ?? ''),
 			loginName: String(data.get('loginName') ?? ''),
 			label: String(data.get('label') ?? ''),
-			pin: String(data.get('pin') ?? '')
+			pin: String(data.get('pin') ?? ''),
+			generate: data.get('generate') === '1'
 		});
 		if (!result.ok) return fail(400, { message: result.message });
 		return {
 			pin: result.pin,
+			generated: result.generated,
 			displayName: result.displayName,
 			loginName: result.loginName,
 			attached: result.attached,
@@ -247,9 +250,34 @@ export const actions: Actions = {
 		const fresh = requireStepUp(event.locals);
 		if (fresh) return fresh;
 		const data = await event.request.formData();
-		const result = await setMemberPin(String(data.get('userId') ?? ''), String(data.get('pin') ?? ''));
+		const result = await setMemberPin(
+			String(data.get('userId') ?? ''),
+			String(data.get('pin') ?? ''),
+			data.get('generate') === '1'
+		);
 		if (!result.ok) return fail(400, { message: result.message });
-		return { pin: result.pin, displayName: result.displayName, loginName: result.loginName, attached: false };
+		return {
+			pin: result.pin,
+			generated: result.generated,
+			displayName: result.displayName,
+			loginName: result.loginName,
+			attached: false
+		};
+	},
+	revealPin: async (event) => {
+		const denied = await requireAdmin(event.locals);
+		if (denied) return denied;
+		const fresh = requireStepUp(event.locals);
+		if (fresh) return fresh;
+		const data = await event.request.formData();
+		const result = await revealMemberPin(String(data.get('userId') ?? ''));
+		if (!result.ok) return fail(400, { message: result.message });
+		return {
+			revealedFor: String(data.get('userId') ?? ''),
+			revealedPin: result.pin,
+			revealedName: result.displayName,
+			message: result.message
+		};
 	},
 	confirmStepUp: async (event) => {
 		const denied = await requireAdmin(event.locals);

@@ -5,11 +5,12 @@
 	import { ACCENT_COLORS, THEME_LABELS } from '#lib/palette';
 	import { formatWhen, lockLabel } from '#lib/format';
 	import { formatEuros } from '#lib/money';
-	import { suggestPin } from '#lib/pin-code';
 	import ListCreateForm from '#lib/components/ListCreateForm.svelte';
 
 	let { data, form } = $props();
 	let copied = $state(false);
+	let visibleFor = $state('');
+	let visiblePin = $state('');
 
 	async function copyPin() {
 		if (!form?.pin) return;
@@ -17,11 +18,24 @@
 		copied = true;
 	}
 
-	function fillPin(event: MouseEvent) {
-		const form = (event.currentTarget as HTMLButtonElement).form;
-		const input = form?.elements.namedItem('pin');
-		if (input instanceof HTMLInputElement) input.value = suggestPin();
+	function revealed(value: typeof form): { id: string; pin: string | null } | null {
+		if (!value || !('revealedFor' in value)) return null;
+		const row = value as { revealedFor?: string; revealedPin?: string | null };
+		if (!row.revealedFor) return null;
+		return { id: row.revealedFor, pin: row.revealedPin ?? null };
 	}
+
+	$effect(() => {
+		const row = revealed(form);
+		if (!row?.pin) return;
+		visibleFor = row.id;
+		visiblePin = row.pin;
+		const timer = setTimeout(() => {
+			visibleFor = '';
+			visiblePin = '';
+		}, 5000);
+		return () => clearTimeout(timer);
+	});
 </script>
 
 <svelte:head><title>Administration — Nos Souhaits</title></svelte:head>
@@ -55,9 +69,12 @@
 		{#if form?.message}<p class="alert" class:ok={!form.message.includes('incorrect')} role="status">{form.message}</p>{/if}
 		{#if form?.pin}
 			<div class="pin-banner">
-				<p>Code de <strong style="letter-spacing:0">{form.displayName}</strong> ({form.loginName})</p>
+				<p>
+					{form && 'generated' in form && form.generated ? 'Code généré' : 'Code enregistré'} pour
+					<strong style="letter-spacing:0">{form.displayName}</strong>
+				</p>
 				<strong>{form.pin}</strong>
-				<p>Notez-le maintenant : il ne sera plus affiché. Transmettez-le en main propre.</p>
+				<p>Connexion avec le prénom « {form.displayName} » et ce code. L’œil le réaffiche 5 secondes.</p>
 				<button class="btn soft small" type="button" onclick={copyPin}>{copied ? 'Copié' : 'Copier'}</button>
 			</div>
 		{/if}
@@ -213,7 +230,25 @@
 												<span>{member.displayName} {#if member.label}<small>{member.label}</small>{/if}</span>
 											</div>
 										</td>
-										<td class="code">······</td>
+										<td class="code">
+											{#if visibleFor === member.id && visiblePin}
+												<span class="revealed">{visiblePin}</span>
+											{:else}
+												······
+											{/if}
+											<form method="post" action="?g={data.current.id}&/revealPin">
+												<input type="hidden" name="userId" value={member.id} />
+												<button class="eye" type="submit" aria-label="Afficher le code de {member.displayName}">
+													<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+														<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" stroke="currentColor" stroke-width="2" />
+														<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" />
+													</svg>
+												</button>
+											</form>
+											{#if revealed(form)?.id === member.id && !revealed(form)?.pin}
+												<span class="quiet">Code non disponible, redéfinis-le.</span>
+											{/if}
+										</td>
 										<td>
 											{#if lock}<span class="lock-pill">{lock}</span>{:else}{formatWhen(member.lastLoginAt ? new Date(member.lastLoginAt) : null)}{/if}
 										</td>
@@ -228,9 +263,9 @@
 												<input type="hidden" name="userId" value={member.id} />
 												<label>
 													Nouveau code
-													<input name="pin" inputmode="numeric" autocomplete="off" maxlength="6" pattern={'[0-9]{6}'} placeholder="6 chiffres" />
+													<input name="pin" inputmode="numeric" autocomplete="off" maxlength="6" pattern={'[0-9]{6}'} placeholder="6 chiffres" required />
 												</label>
-												<button class="btn soft small" type="button" onclick={fillPin}>Générer</button>
+												<button class="btn soft small" type="submit" name="generate" value="1" formnovalidate>Générer</button>
 												<button class="btn small" type="submit">Enregistrer</button>
 											</form>
 										</td>
@@ -260,9 +295,9 @@
 							<label>Rôle dans le groupe<input name="label" maxlength="40" placeholder="Papa, Maman…" /></label>
 							<label>
 								Code à 6 chiffres
-								<input name="pin" inputmode="numeric" autocomplete="off" maxlength="6" pattern={'[0-9]{6}'} placeholder="vide = généré" />
+								<input name="pin" inputmode="numeric" autocomplete="off" maxlength="6" pattern={'[0-9]{6}'} placeholder="6 chiffres" required />
 							</label>
-							<button class="btn soft" type="button" onclick={fillPin}>Générer</button>
+							<button class="btn soft" type="submit" name="generate" value="1" formnovalidate>Générer</button>
 							<button class="btn" type="submit">Ajouter</button>
 						</form>
 					</section>

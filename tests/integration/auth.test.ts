@@ -5,7 +5,7 @@ import { resetMigrationFlag, runMigrations } from '#lib/server/db/migrate';
 import { appGroup, appUser, groupMember, loginAttempt, reservation, wish, wishList } from '#lib/server/db/schema';
 import { hashPin } from '#lib/server/auth/crypto';
 import { loginWithPin } from '#lib/server/auth/login';
-import { unlockMember } from '#lib/server/admin/manage';
+import { addMember, revealMemberPin, setMemberPin, unlockMember } from '#lib/server/admin/manage';
 import { resetSetupCache } from '#lib/server/setup';
 import { getConfig } from '#lib/server/config';
 
@@ -204,5 +204,86 @@ describeDb('authentification et gardes SQL', () => {
 			memberId: buyer[0]!.id,
 			amountCents: 2500
 		});
+	});
+
+	it('conserve le code choisi et connecte avec le prénom affiché', async () => {
+		const group = await getDb().insert(appGroup).values({ name: 'Famille' }).returning();
+		const created = await addMember({
+			groupId: group[0]!.id,
+			displayName: 'Jean-Luc',
+			loginName: '',
+			label: '',
+			pin: '847291'
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+		expect(created.pin).toBe('847291');
+		expect(created.generated).toBe(false);
+		expect(created.loginName).toBe('jeanluc');
+
+		const withHyphen = await loginWithPin({
+			loginName: 'Jean-Luc',
+			pin: '847291',
+			ip: '203.0.113.40',
+			userAgent: 'vitest'
+		});
+		expect(withHyphen.ok).toBe(true);
+		const withSpaces = await loginWithPin({
+			loginName: 'Jean Luc',
+			pin: '847291',
+			ip: '203.0.113.41',
+			userAgent: 'vitest'
+		});
+		expect(withSpaces.ok).toBe(true);
+
+		const rows = await getDb().select().from(appUser);
+		const id = rows.find((row) => row.loginName === 'jeanluc')!.id;
+		const shown = await revealMemberPin(id);
+		expect(shown.ok && shown.pin).toBe('847291');
+
+		const changed = await setMemberPin(id, '159263');
+		expect(changed.ok && !changed.generated && changed.pin).toBe('159263');
+		const oldCode = await loginWithPin({
+			loginName: 'Jean-Luc',
+			pin: '847291',
+			ip: '203.0.113.42',
+			userAgent: 'vitest'
+		});
+		const newCode = await loginWithPin({
+			loginName: 'Jean-Luc',
+			pin: '159263',
+			ip: '203.0.113.43',
+			userAgent: 'vitest'
+		});
+		expect(oldCode.ok).toBe(false);
+		expect(newCode.ok).toBe(true);
+
+		const generated = await setMemberPin(id, '159263', true);
+		expect(generated.ok && generated.generated).toBe(true);
+		if (!generated.ok) return;
+		expect(generated.pin).not.toBe('159263');
+		const afterGenerate = await loginWithPin({
+			loginName: 'Jean-Luc',
+			pin: generated.pin,
+			ip: '203.0.113.44',
+			userAgent: 'vitest'
+		});
+		const previous = await loginWithPin({
+			loginName: 'Jean-Luc',
+			pin: '159263',
+			ip: '203.0.113.45',
+			userAgent: 'vitest'
+		});
+		expect(afterGenerate.ok).toBe(true);
+		expect(previous.ok).toBe(false);
+
+		const empty = await addMember({
+			groupId: group[0]!.id,
+			displayName: 'Camille',
+			loginName: '',
+			label: '',
+			pin: ''
+		});
+		expect(empty.ok).toBe(false);
 	});
 });

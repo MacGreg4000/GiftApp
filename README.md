@@ -124,7 +124,7 @@ Le script a été vérifié sur un dump réel : une table écrite avant `pg_dump
 
 ## Connexion des membres
 
-L’admin crée un groupe, ajoute un membre (prénom affiché, lien de parenté) et reçoit un code à six chiffres **une seule fois**. Le code est stocké sous forme argon2id d’un HMAC-SHA256 (poivre serveur). Il ne peut pas être réaffiché : seulement régénéré, ce qui coupe les sessions du membre.
+L’admin crée un groupe, ajoute un membre (prénom affiché, lien de parenté) et choisit un code à six chiffres, ou touche Générer. Le code est vérifié par argon2id d’un HMAC-SHA256 (poivre serveur) et une copie chiffrée permet à l’admin de le réafficher 5 secondes. La régénération coupe les sessions du membre. La connexion accepte le prénom affiché, avec ou sans tiret.
 
 Le membre choisit son prénom (mémorisé sur l’appareil, pas dans un annuaire public) puis son code. Un prénom inconnu et un code faux donnent le même message. Cinq échecs verrouillent le compte 15 minutes, puis 1 heure, puis 6 heures, puis jusqu’à déblocage par l’admin. Dix échecs depuis la même adresse suivent une échelle proche. Au-delà de 200 échecs dans l’heure, les nouvelles connexions par code sont suspendues une heure ; les sessions déjà ouvertes continuent. La session membre dure environ 180 jours et se prolonge à l’usage. Cookie `httpOnly` : `__Host-session` en HTTPS, `ns_session` en HTTP.
 

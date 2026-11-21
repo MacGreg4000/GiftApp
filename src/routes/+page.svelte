@@ -47,7 +47,7 @@
 	<section class="login-panel">
 		<p class="eyebrow">Bienvenue</p>
 		<h2>Bonjour, qui êtes-vous ?</h2>
-		<p class="lede">Choisissez votre prénom, puis entrez le code à six chiffres reçu de l’organisateur.</p>
+		<p class="lede">Le prénom affiché par l’organisateur, tiret compris, puis le code à six chiffres.</p>
 		{#if form?.message}
 			<p class="alert" role="alert">{form.message}</p>
 		{/if}

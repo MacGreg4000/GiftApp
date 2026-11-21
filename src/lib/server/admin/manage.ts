@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { audit } from '../auth/audit';
-import { hashPin } from '../auth/crypto';
+import { decryptString, encryptString, hashPin, pinEncryptionKey } from '../auth/crypto';
 import { foldName, pinProblem, suggestLoginName, suggestPin } from '../auth/pin';
 import { revokeUserSessions } from '../auth/session';
 import { getConfig } from '../config';
@@ -57,19 +57,35 @@ export async function deleteGroup(id: string) {
 	return { ok: true as const };
 }
 
-function chosenPin(raw: string): { ok: true; pin: string } | { ok: false; message: string } {
+function resolvePin(
+	raw: string,
+	generate: boolean
+): { ok: true; pin: string; generated: boolean } | { ok: false; message: string } {
+	if (generate) return { ok: true, pin: suggestPin(), generated: true };
 	const problem = pinProblem(raw);
 	if (problem) return { ok: false, message: problem };
 	const digits = raw.replace(/\D/g, '');
-	return { ok: true, pin: digits || suggestPin() };
+	if (!digits) {
+		return { ok: false, message: 'Saisissez un code à 6 chiffres, ou touchez Générer.' };
+	}
+	return { ok: true, pin: digits, generated: false };
+}
+
+function sealPin(pin: string) {
+	const config = getConfig();
+	return {
+		pinHash: hashPin(pin, config.pinPepper),
+		pinEnc: encryptString(pin, pinEncryptionKey(config.totpKey))
+	};
 }
 
 async function storePin(userId: string, pin: string) {
-	const pinHash = await hashPin(pin, getConfig().pinPepper);
+	const sealed = sealPin(pin);
 	await getDb()
 		.update(appUser)
 		.set({
-			pinHash,
+			pinHash: await sealed.pinHash,
+			pinEnc: sealed.pinEnc,
 			pinSetAt: new Date(),
 			failedPinCount: 0,
 			lockLevel: 0,
@@ -86,6 +102,7 @@ export async function addMember(input: {
 	loginName: string;
 	label: string;
 	pin: string;
+	generate?: boolean;
 }) {
 	const displayName = input.displayName.trim();
 	if (displayName.length < 1 || displayName.length > 60) {
@@ -104,8 +121,9 @@ export async function addMember(input: {
 		return { ok: false as const, message: 'Le prénom de connexion ne peut contenir que des lettres, chiffres, points et tirets.' };
 	}
 
-	const picked = chosenPin(input.pin);
-	if (!picked.ok) return picked;
+	const wantsPin = Boolean(input.generate) || Boolean(input.pin.replace(/\D/g, ''));
+	const picked = wantsPin ? resolvePin(input.pin, Boolean(input.generate)) : null;
+	if (picked && !picked.ok) return picked;
 
 	const existing = await getDb().select().from(appUser).where(eq(appUser.loginName, loginName)).limit(1);
 	if (existing[0]) {
@@ -116,7 +134,7 @@ export async function addMember(input: {
 				target: [groupMember.groupId, groupMember.userId],
 				set: { label: label || null }
 			});
-		if (input.pin.replace(/\D/g, '')) await storePin(existing[0].id, picked.pin);
+		if (picked?.ok) await storePin(existing[0].id, picked.pin);
 		await audit({
 			actor: 'admin',
 			action: 'member.attach',
@@ -128,15 +146,19 @@ export async function addMember(input: {
 			attached: true,
 			displayName: existing[0].displayName,
 			loginName: existing[0].loginName,
-			pin: input.pin.replace(/\D/g, '') ? picked.pin : (null as string | null)
+			pin: picked?.ok ? picked.pin : (null as string | null),
+			generated: Boolean(picked?.ok && picked.generated)
 		};
 	}
 
+	if (!picked?.ok) {
+		return { ok: false as const, message: 'Saisissez un code à 6 chiffres, ou touchez Générer.' };
+	}
 	const pin = picked.pin;
-	const pinHash = await hashPin(pin, getConfig().pinPepper);
+	const sealed = sealPin(pin);
 	const created = await getDb()
 		.insert(appUser)
-		.values({ displayName, loginName, pinHash })
+		.values({ displayName, loginName, pinHash: await sealed.pinHash, pinEnc: sealed.pinEnc })
 		.returning({ id: appUser.id });
 	await getDb().insert(groupMember).values({
 		groupId: input.groupId,
@@ -149,7 +171,7 @@ export async function addMember(input: {
 		targetId: created[0]!.id,
 		details: { loginName, groupId: input.groupId }
 	});
-	return { ok: true as const, attached: false, displayName, loginName, pin };
+	return { ok: true as const, attached: false, displayName, loginName, pin, generated: picked.generated };
 }
 
 export async function updateMember(input: {
@@ -185,8 +207,8 @@ export async function updateMember(input: {
 	return { ok: true as const };
 }
 
-export async function setMemberPin(userId: string, raw: string) {
-	const picked = chosenPin(raw);
+export async function setMemberPin(userId: string, raw: string, generate = false) {
+	const picked = resolvePin(raw, generate);
 	if (!picked.ok) return picked;
 	const user = await getDb()
 		.select({ displayName: appUser.displayName, loginName: appUser.loginName })
@@ -195,17 +217,50 @@ export async function setMemberPin(userId: string, raw: string) {
 		.limit(1);
 	if (!user[0]) return { ok: false as const, message: 'Membre introuvable.' };
 	await storePin(userId, picked.pin);
-	await audit({ actor: 'admin', action: raw.replace(/\D/g, '') ? 'pin.set' : 'pin.regenerate', targetId: userId });
+	await audit({ actor: 'admin', action: picked.generated ? 'pin.regenerate' : 'pin.set', targetId: userId });
 	return {
 		ok: true as const,
 		pin: picked.pin,
+		generated: picked.generated,
 		displayName: user[0].displayName,
 		loginName: user[0].loginName
 	};
 }
 
 export async function regeneratePin(userId: string) {
-	return setMemberPin(userId, '');
+	return setMemberPin(userId, '', true);
+}
+
+export async function revealMemberPin(userId: string) {
+	const rows = await getDb()
+		.select({ displayName: appUser.displayName, pinEnc: appUser.pinEnc })
+		.from(appUser)
+		.where(eq(appUser.id, userId))
+		.limit(1);
+	const user = rows[0];
+	if (!user) return { ok: false as const, message: 'Membre introuvable.' };
+	if (!user.pinEnc) {
+		await audit({ actor: 'admin', action: 'pin.reveal', targetId: userId, details: { available: false } });
+		return {
+			ok: true as const,
+			pin: null as string | null,
+			displayName: user.displayName,
+			message: 'Code non disponible, redéfinis-le.'
+		};
+	}
+	try {
+		const pin = decryptString(user.pinEnc, pinEncryptionKey(getConfig().totpKey));
+		await audit({ actor: 'admin', action: 'pin.reveal', targetId: userId, details: { available: true } });
+		return { ok: true as const, pin, displayName: user.displayName, message: null as string | null };
+	} catch {
+		await audit({ actor: 'admin', action: 'pin.reveal', targetId: userId, details: { available: false } });
+		return {
+			ok: true as const,
+			pin: null as string | null,
+			displayName: user.displayName,
+			message: 'Code non disponible, redéfinis-le.'
+		};
+	}
 }
 
 export async function unlockMember(userId: string) {

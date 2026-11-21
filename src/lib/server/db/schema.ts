@@ -76,6 +76,7 @@ export const appUser = pgTable(
 		displayName: text('display_name').notNull(),
 		loginName: text('login_name').notNull(),
 		pinHash: text('pin_hash').notNull(),
+		pinEnc: bytea('pin_enc'),
 		pinSetAt: ts('pin_set_at').notNull().defaultNow(),
 		failedPinCount: smallint('failed_pin_count').notNull().default(0),
 		lockLevel: smallint('lock_level').notNull().default(0),

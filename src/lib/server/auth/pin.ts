@@ -37,3 +37,22 @@ export function suggestLoginName(displayName: string, taken: Set<string>): strin
 export function normalizePin(value: string): string {
 	return value.replace(/\D/g, '').slice(0, 6);
 }
+
+/**
+ * Formes possibles du prénom tapé à la connexion.
+ * Le prénom affiché « Jean-Luc » est enregistré « jeanluc » : les deux doivent se retrouver.
+ */
+export function loginCandidates(value: string): string[] {
+	const trimmed = value.trim();
+	if (!trimmed) return [];
+	const keys: string[] = [];
+	const variants = [trimmed, trimmed.split(/\s+/)[0] ?? ''];
+	for (const variant of variants) {
+		const folded = foldName(variant).replace(/\s+/g, '');
+		const compact = folded.replace(/[^a-z0-9]/g, '');
+		for (const key of [folded, compact]) {
+			if (key && !keys.includes(key)) keys.push(key);
+		}
+	}
+	return keys;
+}

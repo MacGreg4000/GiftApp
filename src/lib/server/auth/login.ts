@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { adminAccount, appUser, ipLock, loginAttempt, securityState } from '../db/schema';
 import { audit } from './audit';
@@ -11,7 +11,7 @@ import {
 	verifyPinOrDummy
 } from './crypto';
 import { getConfig } from '../config';
-import { foldName, normalizePin } from './pin';
+import { foldName, loginCandidates, normalizePin } from './pin';
 import {
 	ADMIN_IP_LOCK_DURATIONS,
 	accountIsLocked,
@@ -201,6 +201,21 @@ export type PinLoginResult =
 	  }
 	| { ok: false; code: string; message: string };
 
+async function findMember(typed: string) {
+	const keys = loginCandidates(typed);
+	if (!keys.length) return null;
+	const direct = await getDb().select().from(appUser).where(inArray(appUser.loginName, keys));
+	for (const key of keys) {
+		const hits = direct.filter((row) => row.loginName === key);
+		if (hits.length === 1) return hits[0]!;
+	}
+	const compact = foldName(typed).replace(/[^a-z0-9]/g, '');
+	if (!compact) return null;
+	const named = await getDb().select().from(appUser);
+	const hits = named.filter((row) => foldName(row.displayName).replace(/[^a-z0-9]/g, '') === compact);
+	return hits.length === 1 ? hits[0]! : null;
+}
+
 export async function loginWithPin(input: {
 	loginName: string;
 	pin: string;
@@ -239,12 +254,8 @@ export async function loginWithPin(input: {
 		};
 	}
 
-	const folded = foldName(input.loginName).replace(/\s+/g, '');
 	const pin = normalizePin(input.pin);
-	const users = folded
-		? await getDb().select().from(appUser).where(eq(appUser.loginName, folded)).limit(1)
-		: [];
-	const user = users[0] ?? null;
+	const user = await findMember(input.loginName);
 	const matches = await verifyPinOrDummy(
 		user?.pinHash ?? null,
 		pin.length === 6 ? pin : '000000',

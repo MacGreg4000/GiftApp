@@ -54,6 +54,18 @@ export function newSessionToken(): { token: string; tokenHash: Buffer } {
 	return { token, tokenHash: sha256(token) };
 }
 
+/** Clé AES du code membre : PIN_KEY si elle est définie, sinon dérivée de TOTP_KEY. */
+export function pinEncryptionKey(totpKey: string): string {
+	const explicit = process.env.PIN_KEY?.trim().toLowerCase() ?? '';
+	if (explicit) {
+		if (!/^[0-9a-f]{64}$/.test(explicit)) {
+			throw new Error('PIN_KEY doit faire 64 caractères hexadécimaux.');
+		}
+		return explicit;
+	}
+	return createHash('sha256').update(`nos-souhaits-pin-v1:${totpKey}`).digest('hex');
+}
+
 export function encryptString(plain: string, keyHex: string): Buffer {
 	const key = Buffer.from(keyHex, 'hex');
 	if (key.length !== 32) throw new Error('Clé de chiffrement invalide');
